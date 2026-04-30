@@ -1,0 +1,1410 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Users,
+  BookOpen,
+  CreditCard,
+  Settings,
+  LogOut,
+  LayoutDashboard,
+  CheckSquare,
+  Menu,
+  X,
+  Calendar,
+  Bell,
+  ChevronDown,
+} from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { apiRequest } from "../config/api";
+import Logo from "../assets/Logo.png";
+
+const STATUS = {
+  Present: { bg: "#e8f5e9", text: "#1b5e20", dot: "#43a047", border: "#a5d6a7" },
+  Absent: { bg: "#ffebee", text: "#b71c1c", dot: "#e53935", border: "#ef9a9a" },
+  "Half-day": { bg: "#fff8e1", text: "#e65100", dot: "#fb8c00", border: "#ffe082" },
+};
+
+const AVATAR_BG = ["#1a237e", "#4a148c", "#880e4f", "#006064", "#1b5e20", "#bf360c", "#37474f"];
+
+const NAV_ITEMS = [
+  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, path: "/dashboard" },
+  { key: "students", label: "Students", icon: Users, path: "/students" },
+  { key: "teachers", label: "Teachers", icon: BookOpen, path: "/teachers" },
+  { key: "mark", label: "Attendance", icon: CheckSquare, path: "/dashboard/academichub/attedence" },
+  { key: "fees", label: "Fees", icon: CreditCard, path: "/fees" },
+];
+
+const SETTINGS_PATH = "/settings";
+
+const ATT_TABS = [
+  { key: "mark", label: "Mark Attendance" },
+  { key: "logs", label: "Attendance Logs" },
+  { key: "summary", label: "Summary" },
+];
+
+const SECTION_TABS = [
+  { key: "student", label: "Student Attendance", icon: Users },
+  { key: "teacher", label: "Teacher Attendance", icon: BookOpen },
+];
+
+const ATTENDANCE_CONFIG = {
+  student: {
+    title: "Student Attendance",
+    shortTitle: "Students",
+    entityLabel: "Student",
+    peopleLabel: "students",
+    recordsPath: "/api/attendance",
+    peoplePath: "/api/students",
+    idField: "studentId",
+    nameField: "studentName",
+    normalizePerson: normalizeStudent,
+  },
+  teacher: {
+    title: "Teacher Attendance",
+    shortTitle: "Teachers",
+    entityLabel: "Teacher",
+    peopleLabel: "teachers",
+    recordsPath: "/api/teacher-attendance",
+    peoplePath: "/api/teachers",
+    idField: "teacherId",
+    nameField: "teacherName",
+    normalizePerson: normalizeTeacher,
+  },
+};
+
+function today() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getInitials(name = "") {
+  return name
+    .split(" ")
+    .map((word) => word[0] || "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function normalizeAttendanceRecords(records, { idField, nameField }) {
+  return Array.isArray(records)
+    ? records
+        .filter((record) => record && record[idField] && record[nameField] && record.date && record.status)
+        .map((record) => ({
+          ...record,
+          entityId: record[idField],
+          entityName: record[nameField],
+        }))
+    : [];
+}
+
+function normalizeStudent(student) {
+  const studentId =
+    student.registrationNo || student.admissionNumber || student.email || student.phone || student._id;
+  const studentName = student.studentName || student.fullName;
+
+  return {
+    id: studentId,
+    name: studentName,
+    year: student.year || "",
+    course: student.course || "",
+  };
+}
+
+function normalizeTeacher(teacher) {
+  const teacherId = teacher.employeeId || teacher.staffId || teacher.email || teacher.phone || teacher._id;
+  const teacherName = teacher.teacherName || teacher.fullName || teacher.name;
+
+  return {
+    id: teacherId,
+    name: teacherName,
+    year: teacher.department || "",
+    course: teacher.subject || teacher.subjectExpertise || "",
+  };
+}
+
+function Avatar({ name, idx = 0, size = 44 }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        flexShrink: 0,
+        background: AVATAR_BG[idx % AVATAR_BG.length],
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#fff",
+        fontSize: size * 0.32,
+        fontWeight: 700,
+        letterSpacing: 0.5,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+      }}
+    >
+      {getInitials(name)}
+    </div>
+  );
+}
+
+function Badge({ status }) {
+  const colors = STATUS[status] || STATUS.Present;
+  return (
+    <span
+      style={{
+        background: colors.bg,
+        color: colors.text,
+        border: `1.5px solid ${colors.border}`,
+        borderRadius: 999,
+        padding: "5px 14px",
+        fontSize: 12,
+        fontWeight: 700,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          background: colors.dot,
+          display: "inline-block",
+        }}
+      />
+      {status}
+    </span>
+  );
+}
+
+function StatCard({ label, value, color, icon, sub }) {
+  const Icon = icon;
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 20,
+        padding: "22px 24px",
+        border: "1px solid #e8eaf6",
+        borderLeft: `5px solid ${color}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
+        transition: "transform .2s, box-shadow .2s",
+      }}
+      onMouseEnter={(event) => {
+        event.currentTarget.style.transform = "translateY(-3px)";
+        event.currentTarget.style.boxShadow = "0 10px 32px rgba(0,0,0,0.12)";
+      }}
+      onMouseLeave={(event) => {
+        event.currentTarget.style.transform = "";
+        event.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.06)";
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: "#90a4ae", textTransform: "uppercase" }}>
+          {label}
+        </span>
+        <div
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 13,
+            background: `${color}18`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Icon size={20} color={color} />
+        </div>
+      </div>
+      <span style={{ fontSize: 42, fontWeight: 900, color: "#0f172a", lineHeight: 1 }}>{value}</span>
+      {sub ? <span style={{ fontSize: 12, color: "#90a4ae", fontWeight: 500 }}>{sub}</span> : null}
+    </div>
+  );
+}
+
+function ProgressBar({ pct }) {
+  const color = pct >= 75 ? "#43a047" : pct >= 50 ? "#fb8c00" : "#e53935";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ flex: 1, height: 9, background: "#f0f4f8", borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 999, transition: "width .6s" }} />
+      </div>
+      <span style={{ fontSize: 13, fontWeight: 800, color: "#455a64", minWidth: 40, textAlign: "right" }}>{pct}%</span>
+    </div>
+  );
+}
+
+function Toast({ msg, type, onClose }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3500);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const colors = { success: "#2e7d32", error: "#c62828", info: "#1565c0" };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 24,
+        right: 24,
+        zIndex: 9999,
+        background: colors[type] || colors.info,
+        color: "#fff",
+        padding: "16px 22px",
+        borderRadius: 16,
+        boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        fontSize: 14,
+        fontWeight: 600,
+        maxWidth: 380,
+        animation: "toastIn .3s cubic-bezier(.22,1,.36,1)",
+      }}
+    >
+      <span style={{ flex: 1 }}>{msg}</span>
+      <button
+        onClick={onClose}
+        style={{
+          background: "rgba(255,255,255,0.22)",
+          border: "none",
+          color: "#fff",
+          width: 26,
+          height: 26,
+          borderRadius: "50%",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 15,
+        }}
+      >
+        x
+      </button>
+    </div>
+  );
+}
+
+function Sidebar({ activeTab, activeNav, onNavigate, sidebarOpen, setSidebarOpen }) {
+  return (
+    <>
+      {sidebarOpen ? (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            zIndex: 40,
+            display: "none",
+          }}
+          className="mob-overlay"
+        />
+      ) : null}
+
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          height: "100%",
+          width: 256,
+          background: "linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "20px 16px",
+          zIndex: 50,
+          boxShadow: "4px 0 32px rgba(0,0,0,0.35)",
+          backdropFilter: "blur(16px)",
+          transition: "transform 0.3s cubic-bezier(.22,1,.36,1)",
+          overflowY: "auto",
+        }}
+        className={`sidebar-panel ${sidebarOpen ? "sidebar-open" : ""}`}
+      >
+        <div className="mob-only" style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              border: "none",
+              color: "#94a3b8",
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "color .2s",
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              marginBottom: 32,
+              marginTop: 4,
+              padding: "20px 12px",
+              background: "rgba(255,255,255,0.04)",
+              borderRadius: 22,
+              border: "1px solid rgba(255,255,255,0.07)",
+              gap: 12,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+            }}
+          >
+            <img
+              src={Logo}
+              alt="Sabaramati Hospital and College of Nursing"
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 18,
+                objectFit: "contain",
+                background: "linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.05))",
+                padding: 10,
+                boxShadow: "0 4px 20px rgba(99,102,241,0.28)",
+                flexShrink: 0,
+              }}
+            />
+            <div>
+              <div style={{ color: "#fff", fontWeight: 800, fontSize: 15, textAlign: "left", lineHeight: 1.25 }}>
+                Sabaramati Hospital
+              </div>
+              <div style={{ color: "#94a3b8", fontSize: 11, marginTop: 4, textAlign: "left" }}>
+                College of Nursing
+              </div>
+            </div>
+          </div>
+
+          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+            {NAV_ITEMS.map(({ key, label, icon, path }) => {
+              const Icon = icon;
+              const active =
+                activeNav === key ||
+                (key === "mark" &&
+                  ["mark", "logs", "summary"].includes(activeTab));
+
+              return (
+                <li key={key}>
+                  <button
+                    onClick={() => {
+                      if (key === "mark") {
+                        onNavigate(path, { resetAttendanceView: false });
+                      } else {
+                        onNavigate(path);
+                      }
+                      setSidebarOpen(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "11px 16px",
+                      borderRadius: 14,
+                      border: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      transition: "all .2s",
+                      background: active ? "rgba(255,255,255,0.18)" : "transparent",
+                      color: active ? "#fff" : "#94a3b8",
+                      boxShadow: active ? "0 2px 12px rgba(0,0,0,0.2)" : "none",
+                      position: "relative",
+                    }}
+                  >
+                    {active ? (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: "20%",
+                          bottom: "20%",
+                          width: 3,
+                          borderRadius: "0 3px 3px 0",
+                          background: "linear-gradient(180deg, #818cf8, #6366f1)",
+                        }}
+                      />
+                    ) : null}
+                    <Icon size={18} />
+                    {label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div style={{ margin: "20px 0", borderTop: "1px solid rgba(255,255,255,0.08)" }} />
+
+          <button
+            onClick={() => {
+              onNavigate(SETTINGS_PATH);
+              setSidebarOpen(false);
+            }}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "11px 16px",
+              borderRadius: 14,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 14,
+              fontWeight: 600,
+              transition: "all .2s",
+              background: activeNav === "settings" ? "rgba(255,255,255,0.18)" : "transparent",
+              color: activeNav === "settings" ? "#fff" : "#94a3b8",
+            }}
+          >
+            <Settings size={18} />
+            Settings
+          </button>
+        </div>
+
+        <div>
+          <button
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "11px 16px",
+              borderRadius: 14,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 14,
+              fontWeight: 600,
+              background: "transparent",
+              color: "#fca5a5",
+              transition: "all .2s",
+            }}
+          >
+            <LogOut size={18} />
+            Logout
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Topbar({ activeTab, setSidebarOpen }) {
+  const tabLabels = {
+    dashboard: "Dashboard",
+    students: "Students",
+    teachers: "Teachers",
+    mark: "Attendance",
+    logs: "Logs",
+    summary: "Summary",
+    fees: "Fees",
+    settings: "Settings",
+  };
+
+  return (
+    <header
+      style={{
+        background: "#fff",
+        borderBottom: "1px solid #e8eaf0",
+        padding: "0 28px",
+        height: 68,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+        position: "sticky",
+        top: 0,
+        zIndex: 30,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="mob-only"
+          style={{
+            background: "#f1f5f9",
+            border: "none",
+            cursor: "pointer",
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            display: "none",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#475569",
+          }}
+        >
+          <Menu size={20} />
+        </button>
+
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>
+            {tabLabels[activeTab] || "Dashboard"}
+          </h1>
+          <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button
+          style={{
+            background: "#f1f5f9",
+            border: "none",
+            cursor: "pointer",
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#64748b",
+            position: "relative",
+            transition: "all .2s",
+          }}
+        >
+          <Bell size={18} />
+          <span
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "#ef4444",
+              border: "2px solid #fff",
+            }}
+          />
+        </button>
+
+        <button
+          style={{
+            background: "#f1f5f9",
+            border: "none",
+            cursor: "pointer",
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#64748b",
+            transition: "all .2s",
+          }}
+        >
+          <Calendar size={18} />
+        </button>
+
+        <div style={{ width: 1, height: 32, background: "#e2e8f0" }} />
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "7px 14px",
+            borderRadius: 14,
+            border: "1px solid #e2e8f0",
+            cursor: "pointer",
+            transition: "all .2s",
+            background: "#fafbff",
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #6366f1, #818cf8)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 13,
+              fontWeight: 800,
+              color: "#fff",
+              boxShadow: "0 2px 8px rgba(99,102,241,0.35)",
+            }}
+          >
+            AD
+          </div>
+          <div className="hide-sm">
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>Admin</div>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>Administrator</div>
+          </div>
+          <ChevronDown size={14} color="#94a3b8" className="hide-sm" />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+export default function AttendanceSystem() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [section, setSection] = useState("student");
+  const [activeTab, setActiveTab] = useState("mark");
+  const [attTab, setAttTab] = useState("mark");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [attendanceDate, setAttendanceDate] = useState(today());
+  const [status, setStatus] = useState("Present");
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [dateFilter, setDateFilter] = useState(today());
+  const [submitting, setSubmitting] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [formIds, setFormIds] = useState({ student: "", teacher: "" });
+  const [sectionData, setSectionData] = useState({
+    student: { records: [], people: [], loaded: false, available: true },
+    teacher: { records: [], people: [], loaded: false, available: true, loadMessage: "" },
+  });
+
+  const currentConfig = ATTENDANCE_CONFIG[section];
+  const currentData = sectionData[section];
+  const currentEntityId = formIds[section];
+  const currentLoadMessage = currentData.loadMessage || "";
+  const activeNav = useMemo(() => {
+    if (location.pathname === "/dashboard") return "dashboard";
+    if (location.pathname === "/students") return "students";
+    if (location.pathname === "/teachers") return "teachers";
+    if (location.pathname === "/fees") return "fees";
+    if (location.pathname === SETTINGS_PATH) return "settings";
+    return "mark";
+  }, [location.pathname]);
+
+  const notify = useCallback((msg, type = "success") => {
+    setToast({ msg, type });
+  }, []);
+
+  const handleSidebarNavigate = (path, options = {}) => {
+    if (path === "/dashboard/academichub/attedence") {
+      if (options.resetAttendanceView !== false) {
+        setActiveTab("mark");
+        setAttTab("mark");
+      }
+      navigate(path);
+      return;
+    }
+
+    navigate(path);
+  };
+
+  const loadSectionData = useCallback(async (sectionKey) => {
+    const config = ATTENDANCE_CONFIG[sectionKey];
+
+    try {
+      const [recordsData, peopleData] = await Promise.all([
+        apiRequest(config.recordsPath),
+        apiRequest(config.peoplePath),
+      ]);
+
+      setSectionData((prev) => ({
+        ...prev,
+        [sectionKey]: {
+          records: normalizeAttendanceRecords(recordsData, config),
+          people: peopleData.map(config.normalizePerson).filter((person) => person.id && person.name),
+          loaded: true,
+          available: true,
+          loadMessage: "",
+        },
+      }));
+    } catch (error) {
+      if (sectionKey === "teacher") {
+        setSectionData((prev) => ({
+          ...prev,
+          teacher: {
+            records: [],
+            people: [],
+            loaded: true,
+            available: true,
+            loadMessage: error.message,
+          },
+        }));
+      } else {
+        notify(error.message, "error");
+        setSectionData((prev) => ({
+          ...prev,
+          student: {
+            ...prev.student,
+            loaded: true,
+          },
+        }));
+      }
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    loadSectionData("student");
+  }, [loadSectionData]);
+
+  useEffect(() => {
+    if (section === "teacher" && !sectionData.teacher.loaded) {
+      loadSectionData("teacher");
+    }
+  }, [loadSectionData, section, sectionData.teacher.loaded]);
+
+  const currentRecords = useMemo(() => currentData.records || [], [currentData.records]);
+  const currentPeople = useMemo(() => currentData.people || [], [currentData.people]);
+
+  const todayRecs = useMemo(
+    () => currentRecords.filter((record) => record.date === today()),
+    [currentRecords]
+  );
+
+  const filteredRecs = useMemo(
+    () => (dateFilter ? currentRecords.filter((record) => record.date === dateFilter) : currentRecords),
+    [currentRecords, dateFilter]
+  );
+
+  const stats = useMemo(
+    () => ({
+      total: todayRecs.length,
+      present: todayRecs.filter((record) => record.status === "Present").length,
+      absent: todayRecs.filter((record) => record.status === "Absent").length,
+      halfday: todayRecs.filter((record) => record.status === "Half-day").length,
+    }),
+    [todayRecs]
+  );
+
+  const summary = useMemo(
+    () =>
+      currentPeople.map((person, idx) => {
+        const records = currentRecords.filter((record) => record.entityId === person.id);
+        const present = records.filter((record) => record.status === "Present").length;
+        const absent = records.filter((record) => record.status === "Absent").length;
+        const half = records.filter((record) => record.status === "Half-day").length;
+        const total = present + absent + half;
+        const pct = total ? Math.round(((present + half * 0.5) / total) * 100) : 0;
+        return { ...person, present, absent, half, total, pct, idx };
+      }),
+    [currentPeople, currentRecords]
+  );
+
+  const handleSectionChange = (nextSection) => {
+    setSection(nextSection);
+    setActiveTab("mark");
+    setAttTab("mark");
+    setStatus("Present");
+    setCheckIn("");
+    setCheckOut("");
+    setDateFilter(today());
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!currentData.available) {
+      notify(`Unable to load ${currentConfig.title.toLowerCase()} data right now. Please retry.`, "info");
+      return;
+    }
+
+    if (!currentEntityId) {
+      notify(`Please select a ${currentConfig.entityLabel.toLowerCase()}`, "error");
+      return;
+    }
+
+    const person = currentPeople.find((item) => item.id === currentEntityId);
+    if (!person) {
+      notify(`Selected ${currentConfig.entityLabel.toLowerCase()} was not found`, "error");
+      return;
+    }
+
+    if (!attendanceDate) {
+      notify("Please choose an attendance date", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        date: attendanceDate,
+        status,
+        checkIn,
+        checkOut,
+        [currentConfig.idField]: currentEntityId,
+        [currentConfig.nameField]: person.name,
+      };
+
+      const data = await apiRequest(currentConfig.recordsPath, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (!data.record) {
+        throw new Error(data.message || "Attendance was not saved");
+      }
+
+      await loadSectionData(section);
+      setDateFilter(attendanceDate);
+      notify(data.message || `${currentConfig.entityLabel} attendance saved for ${person.name}`);
+      setFormIds((prev) => ({ ...prev, [section]: "" }));
+      setAttendanceDate(today());
+      setStatus("Present");
+      setCheckIn("");
+      setCheckOut("");
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!currentData.available) {
+      notify(`Unable to load ${currentConfig.title.toLowerCase()} data right now. Please retry.`, "info");
+      return;
+    }
+
+    setDeleteId(id);
+    try {
+      await apiRequest(`${currentConfig.recordsPath}/${id}`, { method: "DELETE" });
+
+      setSectionData((prev) => ({
+        ...prev,
+        [section]: {
+          ...prev[section],
+          records: prev[section].records.filter((record) => record?._id !== id),
+        },
+      }));
+      notify("Record deleted");
+    } catch (error) {
+      notify(error.message, "error");
+    } finally {
+      setDeleteId(null);
+    }
+  };
+
+  if (!sectionData.student.loaded) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f1f5f9", fontFamily: "'DM Sans',sans-serif" }}>
+        <div style={{ textAlign: "center", color: "#94a3b8" }}>
+          <div style={{ width: 42, height: 42, border: "4px solid #e2e8f0", borderTopColor: "#6366f1", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
+          <p style={{ fontSize: 15, fontWeight: 500 }}>Loading data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: #f1f5f9; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 99px; }
+        @keyframes toastIn { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes fadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes spin { to{transform:rotate(360deg)} }
+        .fade-up { animation: fadeUp .38s cubic-bezier(.22,1,.36,1) both; }
+        .sidebar-panel { transform: translateX(0); }
+
+        @media (max-width: 768px) {
+          .sidebar-panel { transform: translateX(-100%); }
+          .sidebar-panel.sidebar-open { transform: translateX(0); }
+          .main-right { margin-left: 0 !important; padding-top: 60px; }
+          .mob-only { display: flex !important; }
+          .mob-overlay { display: block !important; }
+          .hide-sm { display: none !important; }
+          .mob-topbar { display: flex !important; }
+        }
+        @media (min-width: 769px) {
+          .main-right { margin-left: 256px; }
+          .mob-only { display: none !important; }
+          .mob-overlay { display: none !important; }
+          .mob-topbar { display: none !important; }
+        }
+
+        .form-input {
+          width: 100%; padding: 14px 16px; border-radius: 12px;
+          border: 1.5px solid #e2e8f0; font-size: 15px; color: #1e293b;
+          background: #f8fafc; outline: none;
+          font-family: 'DM Sans', sans-serif;
+          transition: border-color .15s, box-shadow .15s;
+        }
+        .form-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); background: #fff; }
+        select.form-input {
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 14px center;
+          background-color: #f8fafc; padding-right: 40px; cursor: pointer;
+        }
+        .tbl-row:hover td { background: #f5f3ff !important; }
+        .del-btn {
+          background: #fff5f5; border: 1.5px solid #fecaca; color: #dc2626;
+          padding: 8px 18px; border-radius: 10px; font-size: 13px; font-weight: 700;
+          cursor: pointer; transition: all .15s; font-family: 'DM Sans', sans-serif;
+        }
+        .att-tab,
+        .section-tab {
+          padding: 10px 20px; border: none; cursor: pointer; font-family: 'DM Sans',sans-serif;
+          font-size: 14px; font-weight: 600; border-radius: 10px; transition: all .18s;
+        }
+        .att-tab-active,
+        .section-tab-active { background: #6366f1; color: #fff; box-shadow: 0 4px 14px rgba(99,102,241,0.35); }
+        .att-tab-inactive,
+        .section-tab-inactive { background: transparent; color: #64748b; }
+        .att-tab-inactive:hover,
+        .section-tab-inactive:hover { background: #f1f5f9; color: #1e293b; }
+      `}</style>
+
+      {toast ? <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} /> : null}
+
+      <div className="mob-topbar" style={{
+        display: "none", position: "fixed", top: 0, left: 0, right: 0, zIndex: 35,
+        background: "linear-gradient(135deg, #0f172a, #1e293b)",
+        padding: "12px 20px",
+        alignItems: "center", justifyContent: "space-between",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: "linear-gradient(135deg, #6366f1, #818cf8)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18,
+          }}>H</div>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>Sabaramati</span>
+        </div>
+        <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{
+          background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.18)",
+          color: "#fff", width: 40, height: 40, borderRadius: 10, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Menu size={18} />
+        </button>
+      </div>
+
+      <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
+        <Sidebar
+          activeTab={activeTab}
+          activeNav={activeNav}
+          onNavigate={handleSidebarNavigate}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+        />
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh" }} className="main-right">
+          <Topbar activeTab={activeTab} setSidebarOpen={setSidebarOpen} />
+
+          <main style={{ flex: 1, padding: "28px 32px 60px", background: "#f1f5f9" }}>
+            {["mark", "logs", "summary"].includes(activeTab) ? (
+              <div className="fade-up">
+                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 18, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content", flexWrap: "wrap" }}>
+                  {SECTION_TABS.map(({ key, label, icon }) => {
+                    const Icon = icon;
+
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => handleSectionChange(key)}
+                        className={`section-tab ${section === key ? "section-tab-active" : "section-tab-inactive"}`}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                      >
+                        <Icon size={16} />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 28, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content" }}>
+                  {ATT_TABS.map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setAttTab(key);
+                        setActiveTab(key);
+                      }}
+                      className={`att-tab ${(attTab === key || activeTab === key) ? "att-tab-active" : "att-tab-inactive"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {currentLoadMessage ? (
+                  <div style={{ background: "#fff", borderRadius: 24, padding: 32, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+                    <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>{currentConfig.title}</h2>
+                    <p style={{ color: "#64748b", fontSize: 14, lineHeight: 1.6 }}>
+                      We could not fully load the {currentConfig.title.toLowerCase()} data. The shared attendance UI is still available below.
+                    </p>
+                    <p style={{ color: "#c62828", fontSize: 13, marginTop: 8 }}>{currentLoadMessage}</p>
+                    <button
+                      type="button"
+                      onClick={() => loadSectionData(section)}
+                      style={{
+                        marginTop: 18,
+                        padding: "12px 18px",
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                        background: "#f8fafc",
+                        color: "#0f172a",
+                        fontSize: 14,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      Retry Loading
+                    </button>
+                  </div>
+                ) : null}
+
+                {activeTab === "mark" ? (
+                  <>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 20, marginBottom: 28 }}>
+                      <StatCard label="Total Today" value={stats.total} color="#6366f1" icon={CheckSquare} sub="Records submitted" />
+                      <StatCard label="Present" value={stats.present} color="#22c55e" icon={Users} sub="In attendance" />
+                      <StatCard label="Absent" value={stats.absent} color="#ef4444" icon={Users} sub="Not present" />
+                      <StatCard label="Half-day" value={stats.halfday} color="#f59e0b" icon={BookOpen} sub="Partial attendance" />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))", gap: 24 }}>
+                      <div style={{ background: "#fff", borderRadius: 24, padding: 36, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 30 }}>
+                          <div>
+                            <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{currentConfig.title}</h2>
+                            <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 5 }}>
+                              Fill in the details for the selected attendance date
+                            </p>
+                          </div>
+                          <span style={{ background: "#ede9fe", color: "#6366f1", fontSize: 12, fontWeight: 800, padding: "7px 15px", borderRadius: 99, border: "1.5px solid #c4b5fd", whiteSpace: "nowrap", marginLeft: 12 }}>
+                            {attendanceDate}
+                          </span>
+                        </div>
+
+                        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>
+                              Select {currentConfig.entityLabel}
+                            </label>
+                            <select
+                              value={currentEntityId}
+                              onChange={(event) => setFormIds((prev) => ({ ...prev, [section]: event.target.value }))}
+                              required
+                              disabled={currentPeople.length === 0}
+                              className="form-input"
+                            >
+                              <option value="">Choose a {currentConfig.entityLabel.toLowerCase()}</option>
+                              {currentPeople.map((person) => (
+                                <option key={person.id} value={person.id}>
+                                  {person.id} · {person.name}
+                                </option>
+                              ))}
+                            </select>
+                            {currentPeople.length === 0 ? (
+                              <div style={{ marginTop: 12, borderRadius: 12, border: "1px solid #e2e8f0", background: "#f8fafc", padding: "14px 16px" }}>
+                                <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                                  No {currentConfig.peopleLabel} are available yet.
+                                </p>
+                                <p style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                                  Create {section === "teacher" ? "a teacher" : "a student"} first, then come back to mark attendance.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(section === "teacher" ? "/teachers" : "/students")}
+                                  style={{
+                                    marginTop: 12,
+                                    padding: "10px 14px",
+                                    borderRadius: 10,
+                                    border: "1px solid #cbd5e1",
+                                    background: "#fff",
+                                    color: "#0f172a",
+                                    fontSize: 13,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    fontFamily: "'DM Sans',sans-serif",
+                                  }}
+                                >
+                                  Open {section === "teacher" ? "Teachers" : "Students"} Page
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>Attendance Date</label>
+                            <input type="date" value={attendanceDate} onChange={(event) => setAttendanceDate(event.target.value)} required className="form-input" />
+                          </div>
+
+                          <div>
+                            <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 12 }}>Status</label>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                              {["Present", "Absent", "Half-day"].map((option) => {
+                                const colors = STATUS[option];
+                                const active = status === option;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={option}
+                                    onClick={() => setStatus(option)}
+                                    style={{
+                                      padding: "14px 8px",
+                                      borderRadius: 14,
+                                      border: active ? `2.5px solid ${colors.dot}` : "1.5px solid #e2e8f0",
+                                      background: active ? colors.bg : "#f8fafc",
+                                      color: active ? colors.text : "#94a3b8",
+                                      cursor: "pointer",
+                                      fontSize: 13,
+                                      fontWeight: 700,
+                                      transition: "all .18s",
+                                      fontFamily: "'DM Sans',sans-serif",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      alignItems: "center",
+                                      gap: 8,
+                                    }}
+                                  >
+                                    <span style={{ width: 12, height: 12, borderRadius: "50%", background: active ? colors.dot : "#e2e8f0", boxShadow: active ? `0 0 10px ${colors.dot}88` : "none", transition: "all .18s" }} />
+                                    {option}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                            {[["Check In", checkIn, setCheckIn], ["Check Out", checkOut, setCheckOut]].map(([label, value, setter]) => (
+                              <div key={label}>
+                                <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>{label}</label>
+                                <input type="time" value={value} onChange={(event) => setter(event.target.value)} className="form-input" />
+                              </div>
+                            ))}
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={submitting}
+                            style={{
+                              width: "100%",
+                              padding: "16px",
+                              background: submitting ? "#a5b4fc" : "linear-gradient(135deg, #4f46e5, #6366f1)",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 14,
+                              fontSize: 16,
+                              fontWeight: 800,
+                              cursor: submitting ? "not-allowed" : "pointer",
+                              boxShadow: "0 6px 24px rgba(99,102,241,0.38)",
+                              transition: "all .2s",
+                              fontFamily: "'DM Sans',sans-serif",
+                            }}
+                          >
+                            {submitting ? "Saving..." : `Submit ${currentConfig.entityLabel} Attendance`}
+                          </button>
+                        </form>
+                      </div>
+
+                      <div style={{ background: "#fff", borderRadius: 24, padding: 28, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                          <div>
+                            <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>Today's Records</h3>
+                            <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>{todayRecs.length} of {currentPeople.length} {currentConfig.peopleLabel} marked</p>
+                          </div>
+                          <div style={{ width: 50, height: 50, borderRadius: "50%", background: "linear-gradient(135deg, #ede9fe, #c4b5fd)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, color: "#6366f1" }}>
+                            {todayRecs.length}
+                          </div>
+                        </div>
+
+                        <div style={{ marginBottom: 20, padding: "14px 16px", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>
+                            <span>Present rate</span>
+                            <span style={{ color: "#22c55e" }}>{stats.total ? Math.round((stats.present / stats.total) * 100) : 0}%</span>
+                          </div>
+                          <div style={{ height: 9, background: "#e2e8f0", borderRadius: 99, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${stats.total ? Math.round((stats.present / stats.total) * 100) : 0}%`, background: "linear-gradient(90deg,#22c55e,#4ade80)", borderRadius: 99, transition: "width .6s" }} />
+                          </div>
+                        </div>
+
+                        {todayRecs.length === 0 ? (
+                          <div style={{ textAlign: "center", padding: "40px 0", color: "#cbd5e1", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ fontSize: 48, marginBottom: 14 }}>No records</div>
+                            <p style={{ fontSize: 16, fontWeight: 600 }}>No records yet</p>
+                            <p style={{ fontSize: 13, marginTop: 4 }}>Use the form to mark attendance</p>
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", flex: 1, maxHeight: 360 }}>
+                            {todayRecs.map((record) => (
+                              <div key={record._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", borderRadius: 16, padding: "13px 16px", border: "1px solid #e2e8f0" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                  <Avatar name={record.entityName} idx={currentPeople.findIndex((person) => person.id === record.entityId)} size={42} />
+                                  <div>
+                                    <p style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>{record.entityName}</p>
+                                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+                                      {record.entityId}
+                                      {record.checkIn ? ` · ${record.checkIn}-${record.checkOut || "?"}` : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  <Badge status={record.status} />
+                                  <button
+                                    onClick={() => handleDelete(record._id)}
+                                    disabled={deleteId === record._id}
+                                    style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 18, padding: 4, borderRadius: 8, transition: "color .15s", lineHeight: 1 }}
+                                  >
+                                    {deleteId === record._id ? "..." : "x"}
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+
+                {activeTab === "logs" ? (
+                  <div style={{ background: "#fff", borderRadius: 24, overflow: "hidden", border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+                    <div style={{ padding: "24px 28px", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                      <div>
+                        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{currentConfig.title} Logs</h2>
+                        <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>{filteredRecs.length} record{filteredRecs.length !== 1 ? "s" : ""} found</p>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <label style={{ fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase" }}>Filter by Date</label>
+                        <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="form-input" style={{ width: "auto" }} />
+                        <button
+                          onClick={() => setDateFilter("")}
+                          style={{ padding: "12px 20px", borderRadius: 12, border: "1.5px solid #e2e8f0", background: "#f8fafc", fontSize: 14, color: "#475569", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 700, transition: "all .15s" }}
+                        >
+                          All Dates
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                        <thead>
+                          <tr style={{ background: "#fafbff" }}>
+                            {[currentConfig.entityLabel, "Date", "Status", "Check In", "Check Out", "Action"].map((heading, index) => (
+                              <th key={heading} style={{ padding: "14px 20px", textAlign: index === 0 ? "left" : "center", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" }}>{heading}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRecs.length === 0 ? (
+                            <tr>
+                              <td colSpan={6} style={{ textAlign: "center", padding: 60, color: "#cbd5e1" }}>
+                                <div style={{ fontSize: 16, fontWeight: 600 }}>No records found</div>
+                              </td>
+                            </tr>
+                          ) : filteredRecs.map((record) => (
+                            <tr key={record._id} className="tbl-row">
+                              <td style={{ padding: "15px 20px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+                                  <Avatar name={record.entityName} idx={currentPeople.findIndex((person) => person.id === record.entityId)} size={42} />
+                                  <div>
+                                    <p style={{ fontWeight: 700, color: "#0f172a", fontSize: 14, lineHeight: 1.2 }}>{record.entityName}</p>
+                                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{record.entityId}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding: "15px 20px", textAlign: "center", color: "#64748b", fontSize: 13 }}>
+                                {new Date(`${record.date}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                              </td>
+                              <td style={{ padding: "15px 20px", textAlign: "center" }}><Badge status={record.status} /></td>
+                              <td style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkIn || "-"}</td>
+                              <td style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkOut || "-"}</td>
+                              <td style={{ padding: "15px 20px", textAlign: "center" }}>
+                                <button className="del-btn" onClick={() => handleDelete(record._id)} disabled={deleteId === record._id}>
+                                  {deleteId === record._id ? "..." : "Delete"}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
+
+                {activeTab === "summary" ? (
+                  <div style={{ background: "#fff", borderRadius: 24, overflow: "hidden", border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+                    <div style={{ padding: "24px 28px", borderBottom: "1px solid #f1f5f9" }}>
+                      <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{currentConfig.title} Summary</h2>
+                      <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>Lifetime attendance overview - all {currentPeople.length} {currentConfig.peopleLabel}</p>
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                        <thead>
+                          <tr style={{ background: "#fafbff" }}>
+                            {[currentConfig.entityLabel, "Present", "Absent", "Half-day", "Total Days", "Attendance %"].map((heading, index) => (
+                              <th key={heading} style={{ padding: "14px 20px", textAlign: index === 0 ? "left" : "center", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" }}>{heading}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summary.map((person) => (
+                            <tr key={person.id} className="tbl-row">
+                              <td style={{ padding: "16px 20px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+                                  <Avatar name={person.name} idx={person.idx} size={44} />
+                                  <div>
+                                    <p style={{ fontWeight: 700, color: "#0f172a", fontSize: 14, lineHeight: 1.2 }}>{person.name}</p>
+                                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{person.id}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#16a34a", fontSize: 19 }}>{person.present}</span></td>
+                              <td style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#dc2626", fontSize: 19 }}>{person.absent}</span></td>
+                              <td style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#d97706", fontSize: 19 }}>{person.half}</span></td>
+                              <td style={{ padding: "16px 20px", textAlign: "center", color: "#475569", fontWeight: 700, fontSize: 16 }}>{person.total}</td>
+                              <td style={{ padding: "16px 20px", minWidth: 210 }}>
+                                {person.total === 0 ? <span style={{ color: "#cbd5e1", fontSize: 13 }}>No records yet</span> : <ProgressBar pct={person.pct} />}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
+                <div style={{ textAlign: "center", color: "#94a3b8" }}>
+                  <div style={{ fontSize: 56, marginBottom: 16 }}>Under construction</div>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>
+                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Page
+                  </h2>
+                  <p style={{ fontSize: 14 }}>This section is under construction.</p>
+                </div>
+              </div>
+            )}
+          </main>
+
+          <footer style={{ background: "#fff", borderTop: "1px solid #e2e8f0", padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: "linear-gradient(135deg,#6366f1,#818cf8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>H</div>
+              <span style={{ fontSize: 13, color: "#475569", fontWeight: 600 }}>Sabaramati Hospital & College of Nursing</span>
+            </div>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>Copyright {new Date().getFullYear()} Student Attendance Management System</span>
+          </footer>
+        </div>
+      </div>
+    </>
+  );
+}  
