@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CheckCircle2, FileText, Send, UserRound, Mail, BriefcaseBusiness } from "lucide-react";
-import Navbar from "../components/Navbar";
+import AdmissionSidebar from "../components/AdmissionSidebar";
 
 const initialTeacherForm = {
   fullName: "",
@@ -37,43 +37,54 @@ function TeacherPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar />
+    <div className="min-h-screen bg-slate-100 text-slate-900 lg:flex">
+      <AdmissionSidebar />
 
-      <main className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <section className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-          <div className="page-enter space-y-6">
-            <p className="text-sm font-semibold uppercase tracking-[0.35em] text-fuchsia-700">
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <section className="mx-auto max-w-6xl rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 px-5 py-5 sm:px-6 lg:px-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-700">
               Teacher Admission
             </p>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-              Apply as an educator through a modern professional form.
+            <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
+              Teacher admission form
             </h1>
-            <p className="text-base leading-8 text-slate-600 sm:text-lg">
-              Share your subject expertise, teaching experience, and resume through a clean responsive application experience.
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
+              Complete the required teacher details below for official registration.
+              Fill the form carefully and submit the application for review.
             </p>
-
-            <div className="rounded-[2rem] border border-fuchsia-200 bg-fuchsia-50 p-6 shadow-lg shadow-fuchsia-100">
-              <div className="mb-4 inline-flex rounded-2xl bg-fuchsia-100 p-3 text-fuchsia-700">
-                <FileText size={24} />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-900">What to prepare</h2>
-              <ul className="mt-4 space-y-3 text-sm leading-7 text-slate-600">
-                <li>Your professional teaching profile</li>
-                <li>Subject specialization and years of experience</li>
-                <li>Updated resume for verification</li>
-              </ul>
-            </div>
           </div>
 
-          <div className="page-enter-delayed">
-            <div className="rounded-[2rem] border border-white bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-8">
-              <div className="mb-8 flex flex-col gap-3 border-b border-slate-200 pb-5">
-                <h2 className="text-3xl font-bold text-slate-900">
-                  Teacher Admission Form
+          <div className="grid gap-6 px-5 py-5 lg:grid-cols-[320px_minmax(0,1fr)] sm:px-6 lg:px-8 lg:py-8">
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                <div className="mb-4 inline-flex rounded-2xl bg-slate-200 p-3 text-slate-700">
+                  <FileText size={22} />
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">Required Details</h2>
+                <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+                  <li>Full name and official email address</li>
+                  <li>Subject expertise and teaching experience</li>
+                  <li>Resume for verification and review</li>
+                </ul>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5">
+                <p className="text-sm font-semibold text-slate-900">Instructions</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Please enter correct professional details. Incomplete or incorrect
+                  information may delay teacher admission approval.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+              <div className="mb-6 border-b border-slate-200 pb-4">
+                <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
+                  Teacher Details
                 </h2>
-                <p className="text-sm text-slate-500">
-                  Complete the details below and submit your application.
+                <p className="mt-2 text-sm text-slate-500">
+                  Fill all required fields and upload the resume before submitting.
                 </p>
               </div>
 
@@ -130,7 +141,7 @@ function TeacherPage() {
                         value={formData.subjectExpertise}
                         onChange={handleChange}
                         className="teacher-field pl-11"
-                        placeholder="e.g. Mathematics"
+                        placeholder="Enter subject expertise"
                         required
                       />
                     </div>
@@ -145,7 +156,7 @@ function TeacherPage() {
                       value={formData.experience}
                       onChange={handleChange}
                       className="teacher-field"
-                      placeholder="e.g. 5"
+                      placeholder="Enter experience"
                       required
                     />
                   </label>
@@ -157,7 +168,7 @@ function TeacherPage() {
                     type="file"
                     name="resume"
                     onChange={handleChange}
-                    className="teacher-field file:mr-4 file:rounded-xl file:border-0 file:bg-fuchsia-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-fuchsia-700 hover:file:bg-fuchsia-200"
+                    className="teacher-field file:mr-4 file:rounded-xl file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-slate-700 hover:file:bg-slate-200"
                     accept=".pdf,.doc,.docx"
                     required
                   />
@@ -166,7 +177,7 @@ function TeacherPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="mt-3 inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-fuchsia-600 to-pink-500 px-6 py-4 text-base font-bold text-white shadow-xl shadow-fuchsia-200 transition duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:from-fuchsia-500 hover:to-pink-400 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="mt-2 inline-flex items-center justify-center gap-3 rounded-2xl bg-slate-900 px-6 py-4 text-base font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {loading ? (
                     <>

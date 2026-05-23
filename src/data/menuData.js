@@ -71,13 +71,13 @@ const menuData = {
     },
     items: [
       {
-        name: "Vouchers",
+        name: "Staff ",
         path: "/dashboard/finance/bank-book",
         icon: FaChalkboardTeacher,
         bg: "bg-green-300",
       },
       {
-        name: "Leader",
+        name: "Department access",
         path: "/dashboard/finance/journal",
         icon: FaUsers,
         bg: "bg-green-400",
@@ -89,7 +89,7 @@ const menuData = {
         bg: "bg-green-500",
       },
       {
-        name: "Audit",
+        name: "Accounts",
         path: "/dashboard/finance/profit-loss",
         icon: FaFileInvoiceDollar,
         bg: "bg-green-400",
@@ -146,12 +146,6 @@ const menuData = {
       text: "text-sm md:text-md font-semibold",
     },
     items: [
-      {
-        name: "Department access",
-        path: "/dashboard/control/exam-attendance",
-        icon: FaBuilding,
-        bg: "bg-purple-300",
-      },
       {
         name: "Setting up",
         path: "/dashboard/control/course",

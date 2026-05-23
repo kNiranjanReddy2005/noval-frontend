@@ -1,96 +1,132 @@
+import { ArrowRight, BookOpenCheck, FileSpreadsheet, GraduationCap } from "lucide-react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Code2, Database, PencilRuler } from "lucide-react";
-import Navbar from "../components/Navbar";
+import AdmissionSidebar from "../components/AdmissionSidebar";
 
-const courses = [
+const courseGroups = [
   {
-    title: "Web Development",
-    description: "Learn frontend, backend, APIs, and deployment with real project workflows.",
-    icon: Code2,
-    accent: "from-cyan-100 to-blue-100",
-    ring: "border-cyan-200",
-    iconBg: "bg-cyan-100 text-cyan-700",
+    heading: "Sabarmati College of Nursing",
+    courses: [
+      { title: "B.Sc Nursing", shortLabel: "B.Sc N" },
+      { title: "M.Sc Nursing", shortLabel: "M.Sc N" },
+      { title: "P.B.BSc Nursing", shortLabel: "P.B.BSc N" },
+    ],
   },
   {
-    title: "Data Science",
-    description: "Build analytical skills with machine learning, data visualization, and practical datasets.",
-    icon: Database,
-    accent: "from-emerald-100 to-teal-100",
-    ring: "border-emerald-200",
-    iconBg: "bg-emerald-100 text-emerald-700",
-  },
-  {
-    title: "UI/UX Design",
-    description: "Create intuitive interfaces with design systems, research, prototyping, and usability thinking.",
-    icon: PencilRuler,
-    accent: "from-fuchsia-100 to-pink-100",
-    ring: "border-fuchsia-200",
-    iconBg: "bg-fuchsia-100 text-fuchsia-700",
+    heading: "Sabarmati School of Nursing",
+    courses: [
+      { title: "ANM", shortLabel: "ANM" },
+      { title: "GNM", shortLabel: "GNM" },
+    ],
   },
 ];
 
 function StudentPage() {
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <Navbar />
+    <div className="min-h-screen bg-[linear-gradient(180deg,#eff6ff_0%,#f8fafc_45%,#e5e7eb_100%)] text-slate-900 lg:flex">
+      <AdmissionSidebar />
 
-      <main className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <section className="page-enter">
-          <div className="mb-12 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="mb-3 text-sm font-semibold uppercase tracking-[0.35em] text-cyan-700">
-                Student Admission
-              </p>
-              <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-                Choose a course and begin your admission journey.
-              </h1>
-              <p className="mt-5 text-base leading-8 text-slate-600 sm:text-lg">
-                Browse animated course cards, compare opportunities, and move into the application form with a smooth page transition.
-              </p>
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <section className="mx-auto max-w-7xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#0f3d73_55%,#1d4ed8_100%)] px-5 py-7 text-white sm:px-6 lg:px-8">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-100">
+                  Student Admission Portal
+                </p>
+                <h1 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+                  Select the course for admission
+                </h1>
+                <p className="mt-3 text-sm leading-7 text-slate-200 sm:text-base">
+                  Choose an official course below and use the continue button to open
+                  the professional admission form with that course preselected.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link
+                  to="/dashboard/academichub/admission"
+                  className="inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+                >
+                  Back to Admission Type
+                </Link>
+                <Link
+                  to="/dashboard/academichub/admission/records"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                >
+                  <FileSpreadsheet size={16} />
+                  Admin Dashboard
+                </Link>
+              </div>
             </div>
-
-            <Link
-              to="/dashboard/academichub/admission"
-              className="inline-flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-900 shadow-sm transition duration-300 hover:-translate-y-1 hover:bg-slate-100"
-            >
-              Open Admission Form
-              <ArrowRight size={16} />
-            </Link>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {courses.map((course, index) => {
-              const Icon = course.icon;
-              return (
-                <article
-                  key={course.title}
-                  className={`page-stagger rounded-[2rem] border ${course.ring} bg-gradient-to-br ${course.accent} p-6 shadow-xl shadow-slate-200 transition duration-300 hover:-translate-y-2 hover:shadow-2xl`}
-                  style={{ animationDelay: `${index * 140}ms` }}
-                >
-                  <div className={`mb-6 inline-flex rounded-2xl p-4 ${course.iconBg}`}>
-                    <Icon size={28} />
-                  </div>
-
-                  <h2 className="text-2xl font-bold text-slate-900">{course.title}</h2>
-                  <p className="mt-4 text-sm leading-7 text-slate-600">
-                    {course.description}
+          <div className="px-5 py-5 sm:px-6 lg:px-8 lg:py-8">
+            <div className="mb-6 rounded-[28px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_100%)] p-5 shadow-sm">
+              <div className="flex items-start gap-4">
+                <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                  <GraduationCap size={22} />
+                </span>
+                <div>
+                  <p className="text-base font-bold text-slate-900">Official Course List</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    This page is part of the admission management workflow. Course
+                    selection leads directly into the online form and the records
+                    are then available in the admin dashboard and Excel export.
                   </p>
+                </div>
+              </div>
+            </div>
 
-                  <div className="mt-8 flex items-center justify-between gap-4">
-                    <span className="rounded-full border border-white/70 bg-white/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">
-                      Enrollment Open
+            <div className="space-y-8">
+              {courseGroups.map((group, groupIndex) => (
+                <section key={group.heading}>
+                  <div className="mb-5 flex items-center gap-3">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                      <GraduationCap size={20} />
                     </span>
-                    <Link
-                      to="/dashboard/academichub/admission"
-                      className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition duration-300 hover:scale-[1.03] hover:bg-indigo-600 active:scale-[0.97]"
-                    >
-                      Apply Now
-                      <ArrowRight size={16} />
-                    </Link>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+                        {groupIndex === 0 ? "College Programs" : "School Programs"}
+                      </p>
+                      <h2 className="text-2xl font-black text-slate-900">{group.heading}</h2>
+                    </div>
                   </div>
-                </article>
-              );
-            })}
+
+                  <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                    {group.courses.map((course, index) => (
+                      <article
+                        key={course.title}
+                        className="group relative overflow-hidden rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-xl"
+                      >
+                        <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[linear-gradient(90deg,#1d4ed8_0%,#60a5fa_100%)] opacity-0 transition group-hover:opacity-100" />
+
+                        <div>
+                          <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 transition group-hover:bg-blue-100 group-hover:text-blue-700">
+                            <BookOpenCheck size={22} />
+                          </span>
+                          <p className="mt-4 text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+                            {course.shortLabel}
+                          </p>
+                          <h3 className="mt-2 text-xl font-bold text-slate-900">{course.title}</h3>
+                          <p className="mt-2 text-sm leading-6 text-slate-600">
+                            Continue with this course and open the official admission
+                            form for candidate registration.
+                          </p>
+                        </div>
+
+                        <Link
+                          to={`/dashboard/academichub/admission/form?course=${encodeURIComponent(course.title)}`}
+                          className="mt-6 inline-flex items-center justify-between rounded-2xl bg-[linear-gradient(135deg,#1d4ed8_0%,#0f172a_100%)] px-4 py-3 text-sm font-semibold text-white transition hover:shadow-lg"
+                        >
+                          Continue
+                          <ArrowRight size={16} />
+                        </Link>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
           </div>
         </section>
       </main>

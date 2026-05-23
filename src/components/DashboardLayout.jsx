@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import FooterBar from "./FooterBar";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 
@@ -13,6 +14,7 @@ const DashboardLayout = () => {
         </header>
 
         <Outlet />
+        <FooterBar />
       </main>
     </div>
   );

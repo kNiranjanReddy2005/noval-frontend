@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Logo from "../assets/Logo.png";
 import { apiRequest } from "../config/api";
+import { getDefaultRouteForRole } from "../utils/permissions";
 
 export default function Login() {
   const [show, setShow] = useState(false);
@@ -25,16 +26,11 @@ export default function Login() {
         body: JSON.stringify({ email, password }),
       });
 
-      // Store token + basic user info
       localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user)); 
-      if (data.user.role === "admin") {
-        window.location.href = "/";
-      } else {
-        window.location.href = "/dashboard";
-      }
-    } catch (error) {
-      setError(error.message || "Unable to connect. Check your network and try again.");
+      localStorage.setItem("user", JSON.stringify(data.user));
+      window.location.href = getDefaultRouteForRole(data.user.role);
+    } catch (requestError) {
+      setError(requestError.message || "Unable to connect. Check your network and try again.");
     } finally {
       setLoading(false);
     }
@@ -43,8 +39,6 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#16244a] via-[#1b295a] to-[#243b7a] flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-6xl bg-white/10 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2">
-
-        {/* Left Section */}
         <div className="flex flex-col justify-center items-center text-center px-6 sm:px-10 py-12 bg-white/5">
           <img
             className="w-32 h-32 sm:w-40 sm:h-40 object-contain mb-6"
@@ -55,17 +49,15 @@ export default function Login() {
             SABARAMATI HOSPITAL AND COLLEGE OF NURSING
           </h1>
           <p className="mt-5 text-sm sm:text-base text-white/90 bg-[#2ac454] px-5 py-3 rounded-full max-w-xl shadow-md">
-            Approved By Indian Nursing Council, New Delhi &amp; Affiliated to Utkal University
+            Super admin creates admin accounts, admins create student accounts, and students get role-based dashboard access.
           </p>
         </div>
 
-        {/* Right Section */}
         <div className="bg-white px-6 sm:px-10 md:px-14 py-10 sm:py-12 flex items-center justify-center">
           <div className="w-full max-w-md">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-800 text-center">Login</h2>
-            <p className="text-gray-500 text-center mt-2 mb-8">Sign in to access your account</p>
+            <p className="text-gray-500 text-center mt-2 mb-8">Sign in with your assigned role account</p>
 
-            {/* Error Banner */}
             {error && (
               <div className="mb-5 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
                 {error}
@@ -73,7 +65,6 @@ export default function Login() {
             )}
 
             <form className="space-y-5" onSubmit={handleSubmit}>
-              {/* Email */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                 <input
@@ -85,7 +76,6 @@ export default function Login() {
                 />
               </div>
 
-              {/* Password */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
                 <input
@@ -97,7 +87,6 @@ export default function Login() {
                 />
               </div>
 
-              {/* Show Password + Forgot */}
               <div className="flex items-center justify-between gap-4 text-sm">
                 <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
                   <input
@@ -108,30 +97,16 @@ export default function Login() {
                   />
                   Show Password
                 </label>
-                <a href="#" className="text-teal-700 hover:text-teal-800 font-medium">
-                  Forgot Password?
-                </a>
               </div>
 
-              {/* Submit */}
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full bg-teal-700 hover:bg-teal-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl shadow-md transition duration-300"
               >
-                {loading ? "Signing in…" : "SIGN IN"}
+                {loading ? "Signing in..." : "SIGN IN"}
               </button>
             </form>
-
-            {/* Sign Up */}
-            <p className="text-center text-sm text-gray-600 mt-6">
-              Don&apos;t have an account?{" "}
-              <a href="/register" className="text-teal-700 font-semibold hover:underline">
-                Sign up
-              </a>
-            </p>
-
-           
           </div>
         </div>
       </div>

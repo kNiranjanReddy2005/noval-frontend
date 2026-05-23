@@ -1,193 +1,378 @@
-import { useEffect, useState } from "react";
-import { apiRequest } from "../config/api";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowUpDown,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  Funnel,
+  Search,
+  UserRoundCheck,
+  UsersRound,
+} from "lucide-react";
+import { API_BASE_URL, apiRequest } from "../config/api";
 
-const emptyForm = {
-  studentName: "",
-  registrationNo: "",
-  year: "",
-  course: "",
-};
+const statusOptions = ["All", "Pending", "Approved"];
+const sortOptions = [
+  { value: "latest", label: "Latest First" },
+  { value: "oldest", label: "Oldest First" },
+  { value: "name-asc", label: "Name A-Z" },
+  { value: "course-asc", label: "Course A-Z" },
+];
+
+function formatDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
 
 const Students = () => {
-  const [students, setStudents] = useState([]);
-  const [formData, setFormData] = useState(emptyForm);
+  const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("latest");
+  const [exportUrl, setExportUrl] = useState(`${API_BASE_URL}/api/admission/export/xlsx`);
+  const [sourceLabel, setSourceLabel] = useState("database");
 
-  const fetchStudents = async () => {
+  const fetchRecords = async () => {
     setLoading(true);
+    setError("");
+
     try {
-      const data = await apiRequest("/api/students");
-      setStudents(data);
-    } catch (err) {
-      setError(err.message);
+      const response = await apiRequest("/api/admission/records");
+      setRecords(response.records || []);
+      setExportUrl(response.exportUrl || `${API_BASE_URL}/api/admission/export/xlsx`);
+      setSourceLabel(response.source || "database");
+    } catch (fetchError) {
+      setError(fetchError.message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStudents();
+    const timer = window.setTimeout(() => {
+      fetchRecords();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  const filteredRecords = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-    setSaving(true);
+    const nextRecords = records.filter((record) => {
+      const matchesStatus =
+        statusFilter === "All" ? true : record.status === statusFilter;
+      const matchesSearch = normalizedSearch
+        ? [record.studentName, record.email, record.phone, record.course, record.applicationId]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(normalizedSearch))
+        : true;
 
+      return matchesStatus && matchesSearch;
+    });
+
+    nextRecords.sort((a, b) => {
+      if (sortBy === "oldest") {
+        return new Date(a.submittedAt) - new Date(b.submittedAt);
+      }
+      if (sortBy === "name-asc") {
+        return a.studentName.localeCompare(b.studentName);
+      }
+      if (sortBy === "course-asc") {
+        return a.course.localeCompare(b.course);
+      }
+
+      return new Date(b.submittedAt) - new Date(a.submittedAt);
+    });
+
+    return nextRecords;
+  }, [records, searchTerm, statusFilter, sortBy]);
+
+  const summary = useMemo(() => {
+    const totalAdmissions = records.length;
+    const pendingApplications = records.filter((record) => record.status === "Pending").length;
+    const approvedAdmissions = records.filter((record) => record.status === "Approved").length;
+
+    return {
+      totalAdmissions,
+      pendingApplications,
+      approvedAdmissions,
+    };
+  }, [records]);
+
+  const updateStatus = async (id, status) => {
     try {
-      const data = await apiRequest("/api/students", {
-        method: "POST",
-        body: JSON.stringify(formData),
+      const response = await apiRequest(`/api/admission/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
       });
 
-      setStudents((prev) => [data.student, ...prev]);
-      setFormData(emptyForm);
-      setMessage("Student created successfully.");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
+      setRecords((current) =>
+        current.map((record) => (record._id === id ? response.record : record))
+      );
+    } catch (updateError) {
+      setError(updateError.message);
     }
   };
 
   return (
-    <section className="flex-1 p-4 md:p-6 lg:p-8 bg-gray-50">
-      <div className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-gray-800">Add Student</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Created students will appear in the attendance dropdown.
-          </p>
-
-          {error && (
-            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-          {message && (
-            <div className="mt-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-              {message}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Student Name
-              </label>
-              <input
-                name="studentName"
-                value={formData.studentName}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Enter student name"
-                required
-              />
+    <section className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#eff6ff_0%,#f8fafc_48%,#e5e7eb_100%)] p-4 md:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)] md:p-8">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">
+                Admin Dashboard
+              </p>
+              <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+                Course admission management system
+              </h1>
+              <p className="mt-3 text-sm leading-7 text-slate-600 sm:text-base">
+                Review live admission records, search applicants, filter by approval
+                stage, and keep downloadable Excel records aligned with Google
+                Sheets integration.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Registration No
-              </label>
-              <input
-                name="registrationNo"
-                value={formData.registrationNo}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
-                placeholder="Enter registration number"
-                required
-              />
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={fetchRecords}
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Refresh Records
+              </button>
+              <a
+                href={exportUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#1d4ed8_0%,#0f172a_100%)] px-5 py-3 text-sm font-semibold text-white transition hover:shadow-lg"
+              >
+                <Download size={16} />
+                Download Excel
+              </a>
             </div>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Year
-                </label>
-                <input
-                  name="year"
-                  value={formData.year}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="1st Year"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Course
-                </label>
-                <input
-                  name="course"
-                  value={formData.course}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="B.Sc Nursing"
-                  required
-                />
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-[28px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_100%)] p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+                    Total Admissions
+                  </p>
+                  <p className="mt-3 text-4xl font-black text-slate-900">
+                    {summary.totalAdmissions}
+                  </p>
+                </div>
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+                  <UsersRound size={22} />
+                </span>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? "Saving..." : "Create Student"}
-            </button>
-          </form>
+            <div className="rounded-[28px] border border-amber-100 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_100%)] p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+                    Pending Applications
+                  </p>
+                  <p className="mt-3 text-4xl font-black text-slate-900">
+                    {summary.pendingApplications}
+                  </p>
+                </div>
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                  <Funnel size={22} />
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-emerald-100 bg-[linear-gradient(135deg,#ecfdf5_0%,#ffffff_100%)] p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+                    Approved Admissions
+                  </p>
+                  <p className="mt-3 text-4xl font-black text-slate-900">
+                    {summary.approvedAdmissions}
+                  </p>
+                </div>
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <CheckCircle2 size={22} />
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.45fr_0.45fr]">
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <Search size={18} className="text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by name, course, phone, email, or application ID"
+                className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+              />
+            </label>
+
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <Funnel size={18} className="text-slate-400" />
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="w-full bg-transparent outline-none"
+              >
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <ArrowUpDown size={18} className="text-slate-400" />
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+                className="w-full bg-transparent outline-none"
+              >
+                {sortOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-800">Student Dashboard</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {students.length} student{students.length === 1 ? "" : "s"} stored in database.
-            </p>
+        {error && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Admission Records</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Showing {filteredRecords.length} record{filteredRecords.length === 1 ? "" : "s"}.
+                Data source: {sourceLabel}.
+              </p>
+            </div>
+
+            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
+              <FileSpreadsheet size={16} />
+              Google Sheets Ready
+            </span>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
                 <tr>
-                  <th className="px-6 py-3">Student Name</th>
-                  <th className="px-6 py-3">Registration No</th>
-                  <th className="px-6 py-3">Year</th>
-                  <th className="px-6 py-3">Course</th>
+                  <th className="px-6 py-4">Student</th>
+                  <th className="px-6 py-4">Contact</th>
+                  <th className="px-6 py-4">Course</th>
+                  <th className="px-6 py-4">Submitted</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-10 text-center text-gray-500">
-                      Loading students...
+                    <td colSpan="6" className="px-6 py-16 text-center text-slate-500">
+                      Loading admission records...
                     </td>
                   </tr>
-                ) : students.length === 0 ? (
+                ) : filteredRecords.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="px-6 py-10 text-center text-gray-500">
-                      No students created yet.
+                    <td colSpan="6" className="px-6 py-16 text-center text-slate-500">
+                      No admission records match the current search or filters.
                     </td>
                   </tr>
                 ) : (
-                  students.map((student) => (
-                    <tr key={student._id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 font-medium text-gray-800">
-                        {student.studentName}
+                  filteredRecords.map((record) => (
+                    <tr key={record._id} className="transition hover:bg-slate-50">
+                      <td className="px-6 py-5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProfile(record)}
+                          className="group flex items-center gap-4 rounded-2xl px-2 py-2 text-left transition hover:bg-slate-100"
+                        >
+                          {record.photoUrl ? (
+                            <img
+                              src={record.photoUrl}
+                              alt={record.studentName}
+                              className="h-12 w-12 rounded-2xl object-cover shadow-sm ring-2 ring-transparent transition group-hover:ring-blue-200"
+                            />
+                          ) : (
+                            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition group-hover:bg-blue-50 group-hover:text-blue-700">
+                              <UsersRound size={20} />
+                            </span>
+                          )}
+                          <div>
+                            <p className="font-semibold text-slate-900 group-hover:text-blue-700">{record.studentName}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
+                              {record.applicationId || "No ID"}
+                            </p>
+                            <p className="mt-1 text-xs font-medium text-blue-600 opacity-0 transition group-hover:opacity-100">
+                              View student profile
+                            </p>
+                          </div>
+                        </button>
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{student.registrationNo}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.year}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.course}</td>
+                      <td className="px-6 py-5 text-slate-600">
+                        <p>{record.email || "-"}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-400">
+                          {record.phone || "-"}
+                        </p>
+                      </td>
+                      <td className="px-6 py-5">
+                        <p className="font-medium text-slate-800">{record.course || "-"}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-400">
+                          {record.gender || "-"}
+                        </p>
+                      </td>
+                      <td className="px-6 py-5 text-slate-600">{formatDate(record.submittedAt)}</td>
+                      <td className="px-6 py-5">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                            record.status === "Approved"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {record.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateStatus(
+                              record._id,
+                              record.status === "Approved" ? "Pending" : "Approved"
+                            )
+                          }
+                          className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          <UserRoundCheck size={16} />
+                          {record.status === "Approved" ? "Mark Pending" : "Approve"}
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -195,6 +380,109 @@ const Students = () => {
             </table>
           </div>
         </div>
+
+        {selectedProfile && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-3xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_32px_120px_rgba(15,23,42,0.2)]">
+              <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_100%)] px-6 py-5">
+                <div className="flex items-center gap-4">
+                  {selectedProfile.photoUrl ? (
+                    <img
+                      src={selectedProfile.photoUrl}
+                      alt={selectedProfile.studentName}
+                      className="h-16 w-16 rounded-3xl object-cover shadow-sm"
+                    />
+                  ) : (
+                    <span className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
+                      <UsersRound size={28} />
+                    </span>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Student Profile</p>
+                    <h3 className="mt-2 text-2xl font-black text-slate-900">{selectedProfile.studentName || "-"}</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {selectedProfile.applicationId || "No application ID"} • {selectedProfile.status}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedProfile(null)}
+                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="grid gap-6 px-6 py-6 md:grid-cols-2">
+                <div className="space-y-4 rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Contact</p>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Email</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.email || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Phone</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.phone || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Address</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.address || "-"}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Academic</p>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Course</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.course || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Department</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.department || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Submitted</p>
+                    <p className="mt-1 font-semibold text-slate-900">{formatDate(selectedProfile.submittedAt)}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Personal</p>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Gender</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.gender || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Date of Birth</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.dob || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Caste Category</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.casteCategory || "-"}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 rounded-[28px] border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Application</p>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Application ID</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.applicationId || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Status</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.status || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Sync Status</p>
+                    <p className="mt-1 font-semibold text-slate-900">{selectedProfile.syncStatus || "-"}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

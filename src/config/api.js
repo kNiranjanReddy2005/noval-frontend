@@ -7,6 +7,24 @@ function buildUrl(path) {
   return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+function extractHtmlErrorMessage(payload, status) {
+  if (typeof payload !== "string") {
+    return "";
+  }
+
+  const routeMatch = payload.match(/Cannot\s+(GET|POST|PUT|PATCH|DELETE)\s+([^<\s]+)/i);
+  if (routeMatch) {
+    const [, method, route] = routeMatch;
+    return `Backend route unavailable: ${method.toUpperCase()} ${route}. Make sure the backend is restarted or redeployed with the latest routes.`;
+  }
+
+  if (payload.includes("<html")) {
+    return `Server returned an unexpected HTML error page with status ${status}.`;
+  }
+
+  return "";
+}
+
 export function getNetworkErrorMessage(error) {
   if (error?.name === "AbortError") {
     return "The request took too long and was cancelled. Please try again.";
@@ -22,11 +40,15 @@ export function getNetworkErrorMessage(error) {
 
 export async function apiRequest(path, options = {}) {
   try {
+    const isFormDataBody = typeof FormData !== "undefined" && options.body instanceof FormData;
+    const token = localStorage.getItem("token");
+
     const response = await fetch(buildUrl(path), {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
+        ...(isFormDataBody ? {} : { "Content-Type": "application/json" }),
       },
     });
 
@@ -36,10 +58,20 @@ export async function apiRequest(path, options = {}) {
       : await response.text();
 
     if (!response.ok) {
+      const htmlMessage = extractHtmlErrorMessage(payload, response.status);
       const message =
         typeof payload === "object" && payload !== null
           ? payload.message
-          : payload;
+          : htmlMessage || payload;
+
+      if (
+        response.status === 401
+        && typeof message === "string"
+        && /invalid|expired token|no token provided/i.test(message)
+      ) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
 
       throw new Error(message || `Request failed with status ${response.status}`);
     }

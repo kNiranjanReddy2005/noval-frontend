@@ -1,42 +1,69 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, BriefcaseBusiness, CircleGauge, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  BellRing,
+  BriefcaseBusiness,
+  CircleGauge,
+  FileSpreadsheet,
+  ShieldCheck,
+  Sparkles,
+  UsersRound,
+} from "lucide-react";
 import CategoryNavbar from "../components/CategoryNavbar";
-import menuData from "../data/menuData";
+import { getStoredUser } from "../utils/auth";
+import { getRoleLabel, getVisibleMenuData } from "../utils/permissions";
 
-
-const categoryDescriptions = {
-  "Academic Hub":
-    "Handle daily academic workflows, from new admissions to attendance tracking and exam coordination.",
-  "Finance & Account":
-    "Review fee operations, accounting records, and reporting tools from one finance workspace.",
-  "Operation & Admin":
-    "Keep campus operations moving with support, inventory, communication, and registration modules.",
-  "Control System":
-    "Manage permissions, platform settings, credentials, and institution-wide control panels.",
+const roleDescriptions = {
+  super_admin: "Full ERP access across student management, attendance, admissions, accounts, payroll, reports, hostel, dashboard, and settings.",
+  admin: "Admin can edit admission and attendance modules, create student accounts, and view all remaining modules in read-only mode.",
+  student: "Student can view attendance, admission details, fee receipts, notifications, and personal profile with no edit access.",
 };
 
-const liveModulePaths = new Set([
-  "/dashboard/academichub/admission",
-  "/dashboard/academichub/attedence",
-  "/dashboard/academichub/exam",
-]);
+const roleHighlights = {
+  super_admin: [
+    "User Management",
+    "Admin Registration Panel",
+    "Financial Analytics",
+    "Reports & Notifications",
+    "Institution Overview",
+  ],
+  admin: [
+    "Student Management",
+    "Attendance Dashboard",
+    "Admission Dashboard",
+    "Student Reports",
+    "View-only ERP Modules",
+  ],
+  student: [
+    "Personal Profile",
+    "Attendance Status",
+    "Admission Information",
+    "Fee Details",
+    "Notifications",
+  ],
+};
 
 const Dashboard = () => {
-  const [activeMenu, setActiveMenu] = useState("Academic Hub");
-  const activeCategory = menuData[activeMenu] ?? menuData["Academic Hub"];
+  const user = getStoredUser();
+  const role = user?.role || "student";
+  const visibleMenuData = getVisibleMenuData(role);
+  const initialMenu = Object.keys(visibleMenuData)[0];
+  const [activeMenu, setActiveMenu] = useState(initialMenu);
+
+  const resolvedMenuData = getVisibleMenuData(role);
+  const resolvedActiveMenu = resolvedMenuData[activeMenu] ? activeMenu : Object.keys(resolvedMenuData)[0];
+  const activeCategory = resolvedMenuData[resolvedActiveMenu];
 
   const summary = useMemo(() => {
-    const totalModules = activeCategory.items.length;
-    const readyModules = activeCategory.items.filter((item) =>
-      liveModulePaths.has(item.path)
-    ).length;
+    const totalModules = Object.values(resolvedMenuData).reduce((sum, category) => sum + category.items.length, 0);
+    const categoryCount = Object.keys(resolvedMenuData).length;
 
     return {
       totalModules,
-      readyModules,
-      comingSoon: totalModules - readyModules,
+      categoryCount,
+      roleLabel: getRoleLabel(role),
     };
-  }, [activeCategory]);
+  }, [resolvedMenuData, role]);
 
   return (
     <section className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.10),_transparent_28%),linear-gradient(180deg,#f3f7fb_0%,#eef4f8_52%,#f8fafc_100%)] p-4 md:p-6 lg:p-8">
@@ -53,71 +80,49 @@ const Dashboard = () => {
                     Official Dashboard
                   </span>
                   <span className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">
-                    <CircleGauge size={14} />
-                    Live Workspace
+                    <ShieldCheck size={14} />
+                    {summary.roleLabel}
                   </span>
                 </div>
 
                 <h1 className="mt-5 max-w-3xl text-3xl font-black tracking-tight sm:text-4xl lg:text-5xl">
-                  Professional control center for daily academic operations.
+                  Role-based ERP control center for institutional operations.
                 </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Manage admissions, attendance, examination workflows, and
-                  institutional modules from one official dashboard with a cleaner,
-                  more focused admin experience.
+                <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
+                  {roleDescriptions[role]}
                 </p>
 
                 <div className="mt-8 grid gap-4 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm transition duration-300 hover:-translate-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">
-                      Modules
-                    </p>
-                    <p className="mt-2 text-3xl font-bold text-white">
-                      {summary.totalModules}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      Total tools in this category
-                    </p>
+                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-100">Role</p>
+                    <p className="mt-2 text-3xl font-bold text-white">{summary.roleLabel}</p>
+                    <p className="mt-2 text-sm text-slate-300">Current access level</p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm transition duration-300 hover:-translate-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">
-                      Ready Now
-                    </p>
-                    <p className="mt-2 text-3xl font-bold text-white">
-                      {summary.readyModules}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      Live modules available today
-                    </p>
+                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100">Categories</p>
+                    <p className="mt-2 text-3xl font-bold text-white">{summary.categoryCount}</p>
+                    <p className="mt-2 text-sm text-slate-300">Visible dashboard sections</p>
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm transition duration-300 hover:-translate-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100">
-                      Coming Soon
-                    </p>
-                    <p className="mt-2 text-3xl font-bold text-white">
-                      {summary.comingSoon}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      Planned modules in progress
-                    </p>
+                  <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100">Modules</p>
+                    <p className="mt-2 text-3xl font-bold text-white">{summary.totalModules}</p>
+                    <p className="mt-2 text-sm text-slate-300">Accessible modules</p>
                   </div>
                 </div>
               </div>
 
               <div className="grid gap-4">
-                <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg">
+                <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">
-                        Active Focus
+                        Role Overview
                       </p>
-                      <h2 className="mt-3 text-2xl font-bold text-slate-900">
-                        {activeMenu}
-                      </h2>
+                      <h2 className="mt-3 text-2xl font-bold text-slate-900">{summary.roleLabel}</h2>
                       <p className="mt-3 text-sm leading-7 text-slate-600">
-                        {categoryDescriptions[activeMenu]}
+                        Signed in as {user?.name || "ERP User"} with role-specific workflow visibility and module permissions.
                       </p>
                     </div>
                     <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
@@ -126,17 +131,15 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_100%)] p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg">
+                <div className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#f8fafc_0%,#eef6ff_100%)] p-6 shadow-sm">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-700">
-                    Workspace Status
+                    Current Focus
                   </p>
                   <div className="mt-4 flex items-end justify-between gap-4">
                     <div>
-                      <p className="text-3xl font-black text-slate-900">
-                        {Math.round((summary.readyModules / summary.totalModules) * 100) || 0}%
-                      </p>
+                      <p className="text-3xl font-black text-slate-900">{activeCategory?.items.length || 0}</p>
                       <p className="mt-2 text-sm leading-6 text-slate-600">
-                        Category readiness based on currently live modules.
+                        Modules available in {resolvedActiveMenu}.
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-3 py-1.5 text-sm font-semibold text-sky-700">
@@ -146,27 +149,31 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-6 text-white shadow-xl transition duration-300 hover:-translate-y-1">
+                <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-6 text-white shadow-xl">
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">
-                    Current Theme
+                    Dashboard Highlights
                   </p>
-                  <h3 className="mt-3 text-xl font-bold text-white">
-                    Professional admin workspace
-                  </h3>
-                  <p className="mt-3 text-sm leading-7 text-slate-300">
-                    Built for structured navigation, faster decisions, and a more
-                    official institutional dashboard experience.
-                  </p>
+                  <div className="mt-4 grid gap-3">
+                    {roleHighlights[role].map((item, index) => {
+                      const icons = [UsersRound, BellRing, FileSpreadsheet, CircleGauge, ShieldCheck];
+                      const Icon = icons[index % icons.length];
+                      return (
+                        <div key={item} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white/90">
+                          <Icon size={16} />
+                          {item}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 rounded-[28px] border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur">
-              <CategoryNavbar
-                activeMenu={activeMenu}
-                onMenuChange={setActiveMenu}
-              />
-            </div>
+            {role !== "student" && (
+              <div className="mt-8 rounded-[28px] border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur">
+                <CategoryNavbar activeMenu={resolvedActiveMenu} onMenuChange={setActiveMenu} role={role} />
+              </div>
+            )}
           </div>
         </div>
       </div>

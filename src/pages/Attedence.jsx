@@ -9,9 +9,6 @@ import {
   CheckSquare,
   Menu,
   X,
-  Calendar,
-  Bell,
-  ChevronDown,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../config/api";
@@ -42,8 +39,20 @@ const ATT_TABS = [
 ];
 
 const SECTION_TABS = [
-  { key: "student", label: "Student Attendance", icon: Users },
-  { key: "teacher", label: "Teacher Attendance", icon: BookOpen },
+  {
+    key: "student",
+    label: "Student Attendance",
+    icon: Users,
+    activeBg: "#2563eb",
+    activeShadow: "rgba(37,99,235,0.35)",
+  },
+  {
+    key: "teacher",
+    label: "Teacher Attendance",
+    icon: BookOpen,
+    activeBg: "#059669",
+    activeShadow: "rgba(5,150,105,0.35)",
+  },
 ];
 
 const ATTENDANCE_CONFIG = {
@@ -252,6 +261,7 @@ function Toast({ msg, type, onClose }) {
 
   return (
     <div
+      className="toast-root"
       style={{
         position: "fixed",
         top: 24,
@@ -508,157 +518,6 @@ function Sidebar({ activeTab, activeNav, onNavigate, sidebarOpen, setSidebarOpen
   );
 }
 
-function Topbar({ activeTab, setSidebarOpen }) {
-  const tabLabels = {
-    dashboard: "Dashboard",
-    students: "Students",
-    teachers: "Teachers",
-    mark: "Attendance",
-    logs: "Logs",
-    summary: "Summary",
-    fees: "Fees",
-    settings: "Settings",
-  };
-
-  return (
-    <header
-      style={{
-        background: "#fff",
-        borderBottom: "1px solid #e8eaf0",
-        padding: "0 28px",
-        height: 68,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-        position: "sticky",
-        top: 0,
-        zIndex: 30,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="mob-only"
-          style={{
-            background: "#f1f5f9",
-            border: "none",
-            cursor: "pointer",
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            display: "none",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#475569",
-          }}
-        >
-          <Menu size={20} />
-        </button>
-
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>
-            {tabLabels[activeTab] || "Dashboard"}
-          </h1>
-          <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
-            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-          </p>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button
-          style={{
-            background: "#f1f5f9",
-            border: "none",
-            cursor: "pointer",
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#64748b",
-            position: "relative",
-            transition: "all .2s",
-          }}
-        >
-          <Bell size={18} />
-          <span
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: "#ef4444",
-              border: "2px solid #fff",
-            }}
-          />
-        </button>
-
-        <button
-          style={{
-            background: "#f1f5f9",
-            border: "none",
-            cursor: "pointer",
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#64748b",
-            transition: "all .2s",
-          }}
-        >
-          <Calendar size={18} />
-        </button>
-
-        <div style={{ width: 1, height: 32, background: "#e2e8f0" }} />
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "7px 14px",
-            borderRadius: 14,
-            border: "1px solid #e2e8f0",
-            cursor: "pointer",
-            transition: "all .2s",
-            background: "#fafbff",
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #6366f1, #818cf8)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 13,
-              fontWeight: 800,
-              color: "#fff",
-              boxShadow: "0 2px 8px rgba(99,102,241,0.35)",
-            }}
-          >
-            AD
-          </div>
-          <div className="hide-sm">
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>Admin</div>
-            <div style={{ fontSize: 11, color: "#94a3b8" }}>Administrator</div>
-          </div>
-          <ChevronDown size={14} color="#94a3b8" className="hide-sm" />
-        </div>
-      </div>
-    </header>
-  );
-}
-
 export default function AttendanceSystem() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -912,6 +771,7 @@ export default function AttendanceSystem() {
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800;9..40,900&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'DM Sans', sans-serif; background: #f1f5f9; }
+        button, input, select { font: inherit; }
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 99px; }
         @keyframes toastIn { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
@@ -919,21 +779,205 @@ export default function AttendanceSystem() {
         @keyframes spin { to{transform:rotate(360deg)} }
         .fade-up { animation: fadeUp .38s cubic-bezier(.22,1,.36,1) both; }
         .sidebar-panel { transform: translateX(0); }
+        .page-content {
+          width: 100%;
+          max-width: none;
+          margin: 0;
+        }
+        .mobile-menu-trigger {
+          display: none;
+        }
 
-        @media (max-width: 768px) {
-          .sidebar-panel { transform: translateX(-100%); }
+        @media (max-width: 1023px) {
+          .sidebar-panel {
+            transform: translateX(-100%);
+            left: 0 !important;
+            width: min(320px, 86vw) !important;
+            min-width: 0 !important;
+            max-width: 86vw !important;
+            border-radius: 0 !important;
+          }
           .sidebar-panel.sidebar-open { transform: translateX(0); }
-          .main-right { margin-left: 0 !important; padding-top: 60px; }
+          .main-right { margin-left: 0 !important; }
           .mob-only { display: flex !important; }
           .mob-overlay { display: block !important; }
           .hide-sm { display: none !important; }
-          .mob-topbar { display: flex !important; }
+          .mobile-menu-trigger {
+            display: inline-flex !important;
+            position: fixed;
+            top: 14px;
+            left: 12px;
+            z-index: 35;
+          }
+          .page-main { padding: 16px 12px 28px !important; }
+          .page-shell { min-height: auto !important; }
+          .page-content {
+            padding-top: 52px;
+          }
+          .section-switcher {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+            padding: 8px !important;
+          }
+          .section-tab {
+            width: 100%;
+            justify-content: center;
+            padding: 12px 10px;
+            font-size: 12px;
+            white-space: nowrap;
+          }
+          .att-switcher {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            padding: 8px !important;
+          }
+          .att-tab {
+            width: 100%;
+            text-align: center;
+            min-height: 44px;
+            padding: 11px 8px;
+            font-size: 12px;
+            white-space: nowrap;
+          }
+          .stats-grid,
+          .content-grid,
+          .time-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .status-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          .desktop-card {
+            padding: 18px !important;
+            border-radius: 18px !important;
+          }
+          .toast-root {
+            left: 12px !important;
+            right: 12px !important;
+            top: 12px !important;
+            max-width: none !important;
+          }
+          .records-list {
+            max-height: none !important;
+          }
+          .records-item {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .records-actions {
+            width: 100%;
+            justify-content: space-between;
+          }
+          .records-head {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 14px;
+          }
+          .records-count {
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 18px !important;
+          }
+          .form-head {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 12px;
+          }
+          .date-chip {
+            margin-left: 0 !important;
+          }
+          .table-card {
+            border-radius: 18px !important;
+          }
+          .table-header {
+            padding: 18px 18px 14px !important;
+            flex-direction: column;
+            align-items: flex-start !important;
+          }
+          .filter-tools {
+            width: 100%;
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+          .filter-date {
+            width: 100% !important;
+          }
+          .responsive-table {
+            min-width: 100% !important;
+          }
+          .responsive-table thead {
+            display: none;
+          }
+          .responsive-table,
+          .responsive-table tbody,
+          .responsive-table tr,
+          .responsive-table td {
+            display: block;
+            width: 100%;
+          }
+          .responsive-table tbody {
+            padding: 12px;
+          }
+          .responsive-table tr {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 18px;
+            padding: 14px;
+            margin-bottom: 12px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+          }
+          .responsive-table td {
+            padding: 10px 0 !important;
+            text-align: left !important;
+            border: none !important;
+          }
+          .responsive-table td::before {
+            content: attr(data-label);
+            display: block;
+            margin-bottom: 4px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1.1px;
+            text-transform: uppercase;
+            color: #94a3b8;
+          }
+          .responsive-table td.no-label::before {
+            display: none;
+          }
+          .summary-person,
+          .log-person {
+            padding-bottom: 8px;
+            border-bottom: 1px solid #eef2f7;
+            margin-bottom: 4px;
+          }
         }
-        @media (min-width: 769px) {
+        @media (max-width: 420px) {
+          .section-tab {
+            font-size: 11px;
+            padding: 12px 8px;
+            gap: 6px !important;
+          }
+          .att-switcher {
+            grid-template-columns: 1fr !important;
+          }
+          .att-tab {
+            white-space: normal;
+          }
+          .status-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @media (min-width: 1024px) {
           .main-right { margin-left: 256px; }
           .mob-only { display: none !important; }
           .mob-overlay { display: none !important; }
-          .mob-topbar { display: none !important; }
+          .page-content {
+            max-width: 1600px;
+            margin: 0 auto;
+          }
         }
 
         .form-input {
@@ -961,42 +1005,21 @@ export default function AttendanceSystem() {
           padding: 10px 20px; border: none; cursor: pointer; font-family: 'DM Sans',sans-serif;
           font-size: 14px; font-weight: 600; border-radius: 10px; transition: all .18s;
         }
-        .att-tab-active,
-        .section-tab-active { background: #6366f1; color: #fff; box-shadow: 0 4px 14px rgba(99,102,241,0.35); }
+        .att-tab-active {
+          background: linear-gradient(135deg, #4f46e5, #6366f1);
+          color: #fff;
+          box-shadow: 0 6px 18px rgba(99,102,241,0.28);
+        }
+        .section-tab-active { color: #fff; }
         .att-tab-inactive,
         .section-tab-inactive { background: transparent; color: #64748b; }
         .att-tab-inactive:hover,
         .section-tab-inactive:hover { background: #f1f5f9; color: #1e293b; }
       `}</style>
 
-      {toast ? <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} /> : null}
+        {toast ? <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} /> : null}
 
-      <div className="mob-topbar" style={{
-        display: "none", position: "fixed", top: 0, left: 0, right: 0, zIndex: 35,
-        background: "linear-gradient(135deg, #0f172a, #1e293b)",
-        padding: "12px 20px",
-        alignItems: "center", justifyContent: "space-between",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: "linear-gradient(135deg, #6366f1, #818cf8)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18,
-          }}>H</div>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>Sabaramati</span>
-        </div>
-        <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{
-          background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.18)",
-          color: "#fff", width: 40, height: 40, borderRadius: 10, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Menu size={18} />
-        </button>
-      </div>
-
-      <div style={{ display: "flex", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
+      <div className="page-shell" style={{ display: "flex", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
         <Sidebar
           activeTab={activeTab}
           activeNav={activeNav}
@@ -1006,21 +1029,46 @@ export default function AttendanceSystem() {
         />
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh" }} className="main-right">
-          <Topbar activeTab={activeTab} setSidebarOpen={setSidebarOpen} />
-
-          <main style={{ flex: 1, padding: "28px 32px 60px", background: "#f1f5f9" }}>
-            {["mark", "logs", "summary"].includes(activeTab) ? (
-              <div className="fade-up">
-                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 18, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content", flexWrap: "wrap" }}>
-                  {SECTION_TABS.map(({ key, label, icon }) => {
+          <main className="page-main" style={{ flex: 1, padding: "28px 32px 60px", background: "#f1f5f9" }}>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="mobile-menu-trigger"
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                border: "1px solid #dbe2ea",
+                background: "#ffffff",
+                color: "#334155",
+                boxShadow: "0 10px 24px rgba(15,23,42,0.12)",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <Menu size={20} />
+            </button>
+            <div className="page-content">
+              {["mark", "logs", "summary"].includes(activeTab) ? (
+                <div className="fade-up">
+                <div className="section-switcher" style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 18, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content", flexWrap: "nowrap" }}>
+                  {SECTION_TABS.map(({ key, label, icon, activeBg, activeShadow }) => {
                     const Icon = icon;
+                    const isActive = section === key;
 
                     return (
                       <button
                         key={key}
                         onClick={() => handleSectionChange(key)}
-                        className={`section-tab ${section === key ? "section-tab-active" : "section-tab-inactive"}`}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                        className={`section-tab ${isActive ? "section-tab-active" : "section-tab-inactive"}`}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 8,
+                          background: isActive ? activeBg : undefined,
+                          boxShadow: isActive ? `0 4px 14px ${activeShadow}` : undefined,
+                        }}
                       >
                         <Icon size={16} />
                         {label}
@@ -1029,7 +1077,7 @@ export default function AttendanceSystem() {
                   })}
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 28, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content" }}>
+                <div className="att-switcher" style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 28, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content" }}>
                   {ATT_TABS.map(({ key, label }) => (
                     <button
                       key={key}
@@ -1074,23 +1122,23 @@ export default function AttendanceSystem() {
 
                 {activeTab === "mark" ? (
                   <>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 20, marginBottom: 28 }}>
+                    <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 20, marginBottom: 28 }}>
                       <StatCard label="Total Today" value={stats.total} color="#6366f1" icon={CheckSquare} sub="Records submitted" />
                       <StatCard label="Present" value={stats.present} color="#22c55e" icon={Users} sub="In attendance" />
                       <StatCard label="Absent" value={stats.absent} color="#ef4444" icon={Users} sub="Not present" />
                       <StatCard label="Half-day" value={stats.halfday} color="#f59e0b" icon={BookOpen} sub="Partial attendance" />
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))", gap: 24 }}>
-                      <div style={{ background: "#fff", borderRadius: 24, padding: 36, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 30 }}>
+                    <div className="content-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))", gap: 24 }}>
+                      <div className="desktop-card" style={{ background: "#fff", borderRadius: 24, padding: 36, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+                        <div className="form-head" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 30 }}>
                           <div>
                             <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{currentConfig.title}</h2>
                             <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 5 }}>
                               Fill in the details for the selected attendance date
                             </p>
                           </div>
-                          <span style={{ background: "#ede9fe", color: "#6366f1", fontSize: 12, fontWeight: 800, padding: "7px 15px", borderRadius: 99, border: "1.5px solid #c4b5fd", whiteSpace: "nowrap", marginLeft: 12 }}>
+                          <span className="date-chip" style={{ background: "#ede9fe", color: "#6366f1", fontSize: 12, fontWeight: 800, padding: "7px 15px", borderRadius: 99, border: "1.5px solid #c4b5fd", whiteSpace: "nowrap", marginLeft: 12 }}>
                             {attendanceDate}
                           </span>
                         </div>
@@ -1151,7 +1199,7 @@ export default function AttendanceSystem() {
 
                           <div>
                             <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 12 }}>Status</label>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
+                            <div className="status-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
                               {["Present", "Absent", "Half-day"].map((option) => {
                                 const colors = STATUS[option];
                                 const active = status === option;
@@ -1185,7 +1233,7 @@ export default function AttendanceSystem() {
                             </div>
                           </div>
 
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                          <div className="time-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                             {[["Check In", checkIn, setCheckIn], ["Check Out", checkOut, setCheckOut]].map(([label, value, setter]) => (
                               <div key={label}>
                                 <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>{label}</label>
@@ -1217,13 +1265,13 @@ export default function AttendanceSystem() {
                         </form>
                       </div>
 
-                      <div style={{ background: "#fff", borderRadius: 24, padding: 28, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+                      <div className="desktop-card" style={{ background: "#fff", borderRadius: 24, padding: 28, border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)", display: "flex", flexDirection: "column" }}>
+                        <div className="records-head" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
                           <div>
                             <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a" }}>Today's Records</h3>
                             <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>{todayRecs.length} of {currentPeople.length} {currentConfig.peopleLabel} marked</p>
                           </div>
-                          <div style={{ width: 50, height: 50, borderRadius: "50%", background: "linear-gradient(135deg, #ede9fe, #c4b5fd)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, color: "#6366f1" }}>
+                          <div className="records-count" style={{ width: 50, height: 50, borderRadius: "50%", background: "linear-gradient(135deg, #ede9fe, #c4b5fd)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, color: "#6366f1" }}>
                             {todayRecs.length}
                           </div>
                         </div>
@@ -1245,9 +1293,9 @@ export default function AttendanceSystem() {
                             <p style={{ fontSize: 13, marginTop: 4 }}>Use the form to mark attendance</p>
                           </div>
                         ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", flex: 1, maxHeight: 360 }}>
+                          <div className="records-list" style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", flex: 1, maxHeight: 360 }}>
                             {todayRecs.map((record) => (
-                              <div key={record._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", borderRadius: 16, padding: "13px 16px", border: "1px solid #e2e8f0" }}>
+                              <div className="records-item" key={record._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", borderRadius: 16, padding: "13px 16px", border: "1px solid #e2e8f0" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                                   <Avatar name={record.entityName} idx={currentPeople.findIndex((person) => person.id === record.entityId)} size={42} />
                                   <div>
@@ -1258,7 +1306,7 @@ export default function AttendanceSystem() {
                                     </p>
                                   </div>
                                 </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div className="records-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                   <Badge status={record.status} />
                                   <button
                                     onClick={() => handleDelete(record._id)}
@@ -1278,15 +1326,15 @@ export default function AttendanceSystem() {
                 ) : null}
 
                 {activeTab === "logs" ? (
-                  <div style={{ background: "#fff", borderRadius: 24, overflow: "hidden", border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
-                    <div style={{ padding: "24px 28px", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                  <div className="table-card" style={{ background: "#fff", borderRadius: 24, overflow: "hidden", border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+                    <div className="table-header" style={{ padding: "24px 28px", borderBottom: "1px solid #f1f5f9", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
                       <div>
                         <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{currentConfig.title} Logs</h2>
                         <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>{filteredRecs.length} record{filteredRecs.length !== 1 ? "s" : ""} found</p>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <div className="filter-tools" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                         <label style={{ fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase" }}>Filter by Date</label>
-                        <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="form-input" style={{ width: "auto" }} />
+                        <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="form-input filter-date" style={{ width: "auto" }} />
                         <button
                           onClick={() => setDateFilter("")}
                           style={{ padding: "12px 20px", borderRadius: 12, border: "1.5px solid #e2e8f0", background: "#f8fafc", fontSize: 14, color: "#475569", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", fontWeight: 700, transition: "all .15s" }}
@@ -1296,7 +1344,7 @@ export default function AttendanceSystem() {
                       </div>
                     </div>
                     <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                      <table className="responsive-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                         <thead>
                           <tr style={{ background: "#fafbff" }}>
                             {[currentConfig.entityLabel, "Date", "Status", "Check In", "Check Out", "Action"].map((heading, index) => (
@@ -1313,8 +1361,8 @@ export default function AttendanceSystem() {
                             </tr>
                           ) : filteredRecs.map((record) => (
                             <tr key={record._id} className="tbl-row">
-                              <td style={{ padding: "15px 20px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+                              <td className="no-label" style={{ padding: "15px 20px" }}>
+                                <div className="log-person" style={{ display: "flex", alignItems: "center", gap: 13 }}>
                                   <Avatar name={record.entityName} idx={currentPeople.findIndex((person) => person.id === record.entityId)} size={42} />
                                   <div>
                                     <p style={{ fontWeight: 700, color: "#0f172a", fontSize: 14, lineHeight: 1.2 }}>{record.entityName}</p>
@@ -1322,13 +1370,13 @@ export default function AttendanceSystem() {
                                   </div>
                                 </div>
                               </td>
-                              <td style={{ padding: "15px 20px", textAlign: "center", color: "#64748b", fontSize: 13 }}>
+                              <td data-label="Date" style={{ padding: "15px 20px", textAlign: "center", color: "#64748b", fontSize: 13 }}>
                                 {new Date(`${record.date}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                               </td>
-                              <td style={{ padding: "15px 20px", textAlign: "center" }}><Badge status={record.status} /></td>
-                              <td style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkIn || "-"}</td>
-                              <td style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkOut || "-"}</td>
-                              <td style={{ padding: "15px 20px", textAlign: "center" }}>
+                              <td data-label="Status" style={{ padding: "15px 20px", textAlign: "center" }}><Badge status={record.status} /></td>
+                              <td data-label="Check In" style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkIn || "-"}</td>
+                              <td data-label="Check Out" style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkOut || "-"}</td>
+                              <td data-label="Action" style={{ padding: "15px 20px", textAlign: "center" }}>
                                 <button className="del-btn" onClick={() => handleDelete(record._id)} disabled={deleteId === record._id}>
                                   {deleteId === record._id ? "..." : "Delete"}
                                 </button>
@@ -1342,13 +1390,13 @@ export default function AttendanceSystem() {
                 ) : null}
 
                 {activeTab === "summary" ? (
-                  <div style={{ background: "#fff", borderRadius: 24, overflow: "hidden", border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
-                    <div style={{ padding: "24px 28px", borderBottom: "1px solid #f1f5f9" }}>
+                  <div className="table-card" style={{ background: "#fff", borderRadius: 24, overflow: "hidden", border: "1px solid #e2e8f0", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
+                    <div className="table-header" style={{ padding: "24px 28px", borderBottom: "1px solid #f1f5f9" }}>
                       <h2 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a" }}>{currentConfig.title} Summary</h2>
                       <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>Lifetime attendance overview - all {currentPeople.length} {currentConfig.peopleLabel}</p>
                     </div>
                     <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+                      <table className="responsive-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                         <thead>
                           <tr style={{ background: "#fafbff" }}>
                             {[currentConfig.entityLabel, "Present", "Absent", "Half-day", "Total Days", "Attendance %"].map((heading, index) => (
@@ -1359,8 +1407,8 @@ export default function AttendanceSystem() {
                         <tbody>
                           {summary.map((person) => (
                             <tr key={person.id} className="tbl-row">
-                              <td style={{ padding: "16px 20px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+                              <td className="no-label" style={{ padding: "16px 20px" }}>
+                                <div className="summary-person" style={{ display: "flex", alignItems: "center", gap: 13 }}>
                                   <Avatar name={person.name} idx={person.idx} size={44} />
                                   <div>
                                     <p style={{ fontWeight: 700, color: "#0f172a", fontSize: 14, lineHeight: 1.2 }}>{person.name}</p>
@@ -1368,11 +1416,11 @@ export default function AttendanceSystem() {
                                   </div>
                                 </div>
                               </td>
-                              <td style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#16a34a", fontSize: 19 }}>{person.present}</span></td>
-                              <td style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#dc2626", fontSize: 19 }}>{person.absent}</span></td>
-                              <td style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#d97706", fontSize: 19 }}>{person.half}</span></td>
-                              <td style={{ padding: "16px 20px", textAlign: "center", color: "#475569", fontWeight: 700, fontSize: 16 }}>{person.total}</td>
-                              <td style={{ padding: "16px 20px", minWidth: 210 }}>
+                              <td data-label="Present" style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#16a34a", fontSize: 19 }}>{person.present}</span></td>
+                              <td data-label="Absent" style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#dc2626", fontSize: 19 }}>{person.absent}</span></td>
+                              <td data-label="Half-day" style={{ padding: "16px 20px", textAlign: "center" }}><span style={{ fontWeight: 800, color: "#d97706", fontSize: 19 }}>{person.half}</span></td>
+                              <td data-label="Total Days" style={{ padding: "16px 20px", textAlign: "center", color: "#475569", fontWeight: 700, fontSize: 16 }}>{person.total}</td>
+                              <td data-label="Attendance %" style={{ padding: "16px 20px", minWidth: 210 }}>
                                 {person.total === 0 ? <span style={{ color: "#cbd5e1", fontSize: 13 }}>No records yet</span> : <ProgressBar pct={person.pct} />}
                               </td>
                             </tr>
@@ -1382,27 +1430,21 @@ export default function AttendanceSystem() {
                     </div>
                   </div>
                 ) : null}
-              </div>
-            ) : (
-              <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
-                <div style={{ textAlign: "center", color: "#94a3b8" }}>
-                  <div style={{ fontSize: 56, marginBottom: 16 }}>Under construction</div>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>
-                    {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Page
-                  </h2>
-                  <p style={{ fontSize: 14 }}>This section is under construction.</p>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}>
+                  <div style={{ textAlign: "center", color: "#94a3b8" }}>
+                    <div style={{ fontSize: 56, marginBottom: 16 }}>Under construction</div>
+                    <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", marginBottom: 8 }}>
+                      {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Page
+                    </h2>
+                    <p style={{ fontSize: 14 }}>This section is under construction.</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </main>
 
-          <footer style={{ background: "#fff", borderTop: "1px solid #e2e8f0", padding: "18px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 9, background: "linear-gradient(135deg,#6366f1,#818cf8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>H</div>
-              <span style={{ fontSize: 13, color: "#475569", fontWeight: 600 }}>Sabaramati Hospital & College of Nursing</span>
-            </div>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>Copyright {new Date().getFullYear()} Student Attendance Management System</span>
-          </footer>
         </div>
       </div>
     </>
