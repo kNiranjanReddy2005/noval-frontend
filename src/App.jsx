@@ -1,7 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import DashboardLayout from "./components/DashboardLayout";
-import menuData from "./data/menuData";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import StudentPage from "./pages/StudentPage";
@@ -22,6 +21,7 @@ import Staff from "./pages/Staff";
 import Account from "./pages/Account";
 import Department from "./pages/Department";
 import StudentDashboard from "./pages/StudentDashboard";
+import StudentAdmissionDetails from "./pages/StudentAdmissionDetails";
 import { getStoredUser, isAuthenticated } from "./utils/auth";
 import { canAccessRoute, getDefaultRouteForRole, getVisibleMenuData } from "./utils/permissions";
 
@@ -114,6 +114,14 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["student"]} requiredPath="/dashboard/student/home">
                 <StudentDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/student/admission-details"
+            element={
+              <ProtectedRoute allowedRoles={["student"]} requiredPath="/dashboard/student/admission-details">
+                <StudentAdmissionDetails />
               </ProtectedRoute>
             }
           />

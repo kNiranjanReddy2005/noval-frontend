@@ -18,7 +18,7 @@ const MODULE_RULES = {
   "/dashboard/academichub/admission": ["super_admin", "admin"],
   "/dashboard/academichub/admission/form": ["super_admin", "admin"],
   "/dashboard/academichub/admission/records": ["super_admin", "admin"],
-  "/dashboard/academichub/attedence": ["super_admin", "admin"],
+  "/dashboard/academichub/attedence": ["super_admin", "admin", "student"],
   "/dashboard/academichub/exam": ["super_admin", "admin"],
   "/dashboard/academichub/leave": ["super_admin", "admin"],
   "/dashboard/finance/bank-book": ["super_admin", "admin"],
@@ -28,9 +28,10 @@ const MODULE_RULES = {
   "/dashboard/finance/profit-loss": ["super_admin", "admin"],
   "/students": ["super_admin", "admin"],
   "/teachers": ["super_admin", "admin"],
-  "/fees": ["super_admin", "admin"],
+  "/fees": ["super_admin", "admin", "student"],
   "/settings": ["super_admin", "admin"],
   "/dashboard/student/home": ["student"],
+  "/dashboard/student/admission-details": ["student"],
 };
 
 const EDIT_RULES = {

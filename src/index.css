@@ -3,8 +3,14 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply overflow-x-hidden bg-slate-50 text-slate-900 antialiased;
   }
 }
 
@@ -61,6 +67,17 @@
       linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px);
     background-size: 42px 42px;
     mask-image: radial-gradient(circle at center, black 35%, transparent 82%);
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
 }
 

@@ -81,3 +81,56 @@ export async function apiRequest(path, options = {}) {
     throw new Error(getNetworkErrorMessage(error));
   }
 }
+
+function getFilenameFromDisposition(contentDisposition) {
+  if (!contentDisposition) {
+    return "";
+  }
+
+  const utfMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) {
+    return decodeURIComponent(utfMatch[1]);
+  }
+
+  const asciiMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  return asciiMatch?.[1] || "";
+}
+
+export async function downloadFile(path, fallbackFilename = "download") {
+  try {
+    const token = localStorage.getItem("token");
+
+    const response = await fetch(buildUrl(path), {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      const contentType = response.headers.get("content-type") || "";
+      const payload = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+      const htmlMessage = extractHtmlErrorMessage(payload, response.status);
+      const message =
+        typeof payload === "object" && payload !== null
+          ? payload.message
+          : htmlMessage || payload;
+
+      throw new Error(message || `Request failed with status ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download =
+      getFilenameFromDisposition(response.headers.get("content-disposition")) || fallbackFilename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    throw new Error(getNetworkErrorMessage(error));
+  }
+}

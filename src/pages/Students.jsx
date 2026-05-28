@@ -9,7 +9,7 @@ import {
   UserRoundCheck,
   UsersRound,
 } from "lucide-react";
-import { API_BASE_URL, apiRequest } from "../config/api";
+import { apiRequest, downloadFile } from "../config/api";
 
 const statusOptions = ["All", "Pending", "Approved"];
 const sortOptions = [
@@ -38,7 +38,7 @@ const Students = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [sortBy, setSortBy] = useState("latest");
-  const [exportUrl, setExportUrl] = useState(`${API_BASE_URL}/api/admission/export/xlsx`);
+  const [downloadLoading, setDownloadLoading] = useState(false);
   const [sourceLabel, setSourceLabel] = useState("database");
 
   const fetchRecords = async () => {
@@ -48,7 +48,6 @@ const Students = () => {
     try {
       const response = await apiRequest("/api/admission/records");
       setRecords(response.records || []);
-      setExportUrl(response.exportUrl || `${API_BASE_URL}/api/admission/export/xlsx`);
       setSourceLabel(response.source || "database");
     } catch (fetchError) {
       setError(fetchError.message);
@@ -124,6 +123,19 @@ const Students = () => {
     }
   };
 
+  const handleExcelDownload = async () => {
+    setDownloadLoading(true);
+    setError("");
+
+    try {
+      await downloadFile("/api/admission/export/xlsx", "admissions-export.xls");
+    } catch (downloadError) {
+      setError(downloadError.message);
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
   return (
     <section className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,#eff6ff_0%,#f8fafc_48%,#e5e7eb_100%)] p-4 md:p-6 lg:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -151,15 +163,15 @@ const Students = () => {
               >
                 Refresh Records
               </button>
-              <a
-                href={exportUrl}
-                target="_blank"
-                rel="noreferrer"
+              <button
+                type="button"
+                onClick={handleExcelDownload}
+                disabled={downloadLoading}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#1d4ed8_0%,#0f172a_100%)] px-5 py-3 text-sm font-semibold text-white transition hover:shadow-lg"
               >
                 <Download size={16} />
-                Download Excel
-              </a>
+                {downloadLoading ? "Downloading Excel..." : "Download Excel"}
+              </button>
             </div>
           </div>
 
@@ -213,7 +225,7 @@ const Students = () => {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_0.45fr_0.45fr]">
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.45fr)_minmax(0,0.45fr)]">
             <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <Search size={18} className="text-slate-400" />
               <input
@@ -279,7 +291,7 @@ const Students = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="min-w-[860px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-[0.18em] text-slate-500">
                 <tr>
                   <th className="px-6 py-4">Student</th>
@@ -382,25 +394,26 @@ const Students = () => {
         </div>
 
         {selectedProfile && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-3xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_32px_120px_rgba(15,23,42,0.2)]">
-              <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_100%)] px-6 py-5">
-                <div className="flex items-center gap-4">
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/45 p-3 backdrop-blur-sm sm:p-4">
+            <div className="flex min-h-full items-start justify-center py-4 sm:items-center">
+              <div className="w-full max-w-3xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_32px_120px_rgba(15,23,42,0.2)]">
+              <div className="flex flex-col gap-4 border-b border-slate-200 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_100%)] px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+                <div className="flex min-w-0 items-center gap-4">
                   {selectedProfile.photoUrl ? (
                     <img
                       src={selectedProfile.photoUrl}
                       alt={selectedProfile.studentName}
-                      className="h-16 w-16 rounded-3xl object-cover shadow-sm"
+                      className="h-14 w-14 rounded-3xl object-cover shadow-sm sm:h-16 sm:w-16"
                     />
                   ) : (
-                    <span className="inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-500">
+                    <span className="inline-flex h-14 w-14 items-center justify-center rounded-3xl bg-slate-100 text-slate-500 sm:h-16 sm:w-16">
                       <UsersRound size={28} />
                     </span>
                   )}
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Student Profile</p>
-                    <h3 className="mt-2 text-2xl font-black text-slate-900">{selectedProfile.studentName || "-"}</h3>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <h3 className="mt-2 break-words text-xl font-black text-slate-900 sm:text-2xl">{selectedProfile.studentName || "-"}</h3>
+                    <p className="mt-1 break-words text-sm text-slate-500">
                       {selectedProfile.applicationId || "No application ID"} • {selectedProfile.status}
                     </p>
                   </div>
@@ -409,13 +422,13 @@ const Students = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedProfile(null)}
-                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 sm:w-auto"
                 >
                   Close
                 </button>
               </div>
 
-              <div className="grid gap-6 px-6 py-6 md:grid-cols-2">
+              <div className="grid max-h-[calc(100vh-12rem)] gap-6 overflow-y-auto px-5 py-5 md:grid-cols-2 md:px-6 md:py-6">
                 <div className="space-y-4 rounded-[28px] border border-slate-200 bg-slate-50 p-5">
                   <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Contact</p>
                   <div>
@@ -482,6 +495,7 @@ const Students = () => {
               </div>
             </div>
           </div>
+        </div>
         )}
       </div>
     </section>

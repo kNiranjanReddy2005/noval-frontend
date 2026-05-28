@@ -102,7 +102,7 @@ const menuData = {
       },
     ],
   },
-  "Operation & Admin": {
+  /* "Operation & Admin": {
     color: {
       active: "bg-yellow-500 text-white",
       light: "bg-yellow-50 text-yellow-700",
@@ -171,7 +171,7 @@ const menuData = {
         bg: "bg-purple-300",
       },
     ],
-  },
+  }, */
 };
 
 export default menuData;

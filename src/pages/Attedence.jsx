@@ -9,10 +9,15 @@ import {
   CheckSquare,
   Menu,
   X,
+  Download,
+  ShieldCheck,
+  Eye,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { apiRequest } from "../config/api";
 import Logo from "../assets/Logo.png";
+import { getStoredUser } from "../utils/auth";
+import { canAccessRoute, canEditModule, getRoleLabel } from "../utils/permissions";
 
 const STATUS = {
   Present: { bg: "#e8f5e9", text: "#1b5e20", dot: "#43a047", border: "#a5d6a7" },
@@ -132,6 +137,51 @@ function normalizeTeacher(teacher) {
     year: teacher.department || "",
     course: teacher.subject || teacher.subjectExpertise || "",
   };
+}
+
+function escapeCsvCell(value) {
+  const stringValue = value == null ? "" : String(value);
+  return `"${stringValue.replace(/"/g, '""')}"`;
+}
+
+function downloadCsv(filename, rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return false;
+  }
+
+  const headers = Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row || {}).forEach((key) => set.add(key));
+      return set;
+    }, new Set())
+  );
+
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escapeCsvCell(row?.[header] ?? "")).join(",")),
+  ];
+
+  const blob = new Blob([`\ufeff${lines.join("\n")}`], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+function formatDisplayDate(value) {
+  if (!value) return "-";
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function Avatar({ name, idx = 0, size = 44 }) {
@@ -304,7 +354,12 @@ function Toast({ msg, type, onClose }) {
   );
 }
 
-function Sidebar({ activeTab, activeNav, onNavigate, sidebarOpen, setSidebarOpen }) {
+function Sidebar({ activeTab, activeNav, onNavigate, role, sidebarOpen, setSidebarOpen }) {
+  const dashboardPath = role === "student" ? "/dashboard/student/home" : "/dashboard";
+  const visibleNavItems = NAV_ITEMS
+    .map((item) => (item.key === "dashboard" ? { ...item, path: dashboardPath } : item))
+    .filter((item) => canAccessRoute(role, item.path));
+
   return (
     <>
       {sidebarOpen ? (
@@ -403,7 +458,7 @@ function Sidebar({ activeTab, activeNav, onNavigate, sidebarOpen, setSidebarOpen
           </div>
 
           <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
-            {NAV_ITEMS.map(({ key, label, icon, path }) => {
+            {visibleNavItems.map(({ key, label, icon, path }) => {
               const Icon = icon;
               const active =
                 activeNav === key ||
@@ -463,31 +518,33 @@ function Sidebar({ activeTab, activeNav, onNavigate, sidebarOpen, setSidebarOpen
 
           <div style={{ margin: "20px 0", borderTop: "1px solid rgba(255,255,255,0.08)" }} />
 
-          <button
-            onClick={() => {
-              onNavigate(SETTINGS_PATH);
-              setSidebarOpen(false);
-            }}
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "11px 16px",
-              borderRadius: 14,
-              border: "none",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              fontSize: 14,
-              fontWeight: 600,
-              transition: "all .2s",
-              background: activeNav === "settings" ? "rgba(255,255,255,0.18)" : "transparent",
-              color: activeNav === "settings" ? "#fff" : "#94a3b8",
-            }}
-          >
-            <Settings size={18} />
-            Settings
-          </button>
+          {canAccessRoute(role, SETTINGS_PATH) ? (
+            <button
+              onClick={() => {
+                onNavigate(SETTINGS_PATH);
+                setSidebarOpen(false);
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "11px 16px",
+                borderRadius: 14,
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: 14,
+                fontWeight: 600,
+                transition: "all .2s",
+                background: activeNav === "settings" ? "rgba(255,255,255,0.18)" : "transparent",
+                color: activeNav === "settings" ? "#fff" : "#94a3b8",
+              }}
+            >
+              <Settings size={18} />
+              Settings
+            </button>
+          ) : null}
         </div>
 
         <div>
@@ -521,19 +578,23 @@ function Sidebar({ activeTab, activeNav, onNavigate, sidebarOpen, setSidebarOpen
 export default function AttendanceSystem() {
   const navigate = useNavigate();
   const location = useLocation();
+  const currentUser = getStoredUser();
+  const role = currentUser?.role || "student";
+  const isStudentView = role === "student";
+  const isSuperAdmin = role === "super_admin";
+  const canEditAttendance = canEditModule(role, "/dashboard/academichub/attedence");
+  const canExportAttendance = isSuperAdmin;
   const [section, setSection] = useState("student");
-  const [activeTab, setActiveTab] = useState("mark");
-  const [attTab, setAttTab] = useState("mark");
+  const [activeTab, setActiveTab] = useState(isStudentView ? "logs" : "mark");
+  const [attTab, setAttTab] = useState(isStudentView ? "logs" : "mark");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [attendanceDate, setAttendanceDate] = useState(today());
   const [status, setStatus] = useState("Present");
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
   const [dateFilter, setDateFilter] = useState(today());
   const [submitting, setSubmitting] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [toast, setToast] = useState(null);
-  const [formIds, setFormIds] = useState({ student: "", teacher: "" });
+  const [selectedIdsBySection, setSelectedIdsBySection] = useState({ student: [], teacher: [] });
   const [sectionData, setSectionData] = useState({
     student: { records: [], people: [], loaded: false, available: true },
     teacher: { records: [], people: [], loaded: false, available: true, loadMessage: "" },
@@ -541,10 +602,10 @@ export default function AttendanceSystem() {
 
   const currentConfig = ATTENDANCE_CONFIG[section];
   const currentData = sectionData[section];
-  const currentEntityId = formIds[section];
   const currentLoadMessage = currentData.loadMessage || "";
+  const currentSelectedIds = selectedIdsBySection[section] || [];
   const activeNav = useMemo(() => {
-    if (location.pathname === "/dashboard") return "dashboard";
+    if (location.pathname === "/dashboard" || location.pathname === "/dashboard/student/home") return "dashboard";
     if (location.pathname === "/students") return "students";
     if (location.pathname === "/teachers") return "teachers";
     if (location.pathname === "/fees") return "fees";
@@ -559,8 +620,9 @@ export default function AttendanceSystem() {
   const handleSidebarNavigate = (path, options = {}) => {
     if (path === "/dashboard/academichub/attedence") {
       if (options.resetAttendanceView !== false) {
-        setActiveTab("mark");
-        setAttTab("mark");
+        const defaultTab = isStudentView ? "logs" : "mark";
+        setActiveTab(defaultTab);
+        setAttTab(defaultTab);
       }
       navigate(path);
       return;
@@ -572,17 +634,44 @@ export default function AttendanceSystem() {
   const loadSectionData = useCallback(async (sectionKey) => {
     const config = ATTENDANCE_CONFIG[sectionKey];
 
+    if (isStudentView && sectionKey === "teacher") {
+      setSectionData((prev) => ({
+        ...prev,
+        teacher: {
+          records: [],
+          people: [],
+          loaded: true,
+          available: false,
+          loadMessage: "Teacher attendance is available only for admin and super admin users.",
+        },
+      }));
+      return;
+    }
+
     try {
-      const [recordsData, peopleData] = await Promise.all([
-        apiRequest(config.recordsPath),
-        apiRequest(config.peoplePath),
-      ]);
+      const [recordsData, peopleData] = await Promise.all(
+        isStudentView && sectionKey === "student"
+          ? [
+              apiRequest("/api/attendance/me"),
+              apiRequest("/api/students/me/profile"),
+            ]
+          : [
+              apiRequest(config.recordsPath),
+              apiRequest(config.peoplePath),
+            ]
+      );
 
       setSectionData((prev) => ({
         ...prev,
         [sectionKey]: {
           records: normalizeAttendanceRecords(recordsData, config),
-          people: peopleData.map(config.normalizePerson).filter((person) => person.id && person.name),
+          people: (
+            isStudentView && sectionKey === "student"
+              ? [peopleData?.student]
+              : peopleData
+          )
+            .map(config.normalizePerson)
+            .filter((person) => person.id && person.name),
           loaded: true,
           available: true,
           loadMessage: "",
@@ -611,7 +700,7 @@ export default function AttendanceSystem() {
         }));
       }
     }
-  }, [notify]);
+  }, [isStudentView, notify]);
 
   useEffect(() => {
     loadSectionData("student");
@@ -621,10 +710,11 @@ export default function AttendanceSystem() {
     if (section === "teacher" && !sectionData.teacher.loaded) {
       loadSectionData("teacher");
     }
-  }, [loadSectionData, section, sectionData.teacher.loaded]);
+  }, [isStudentView, loadSectionData, section, sectionData.teacher.loaded]);
 
   const currentRecords = useMemo(() => currentData.records || [], [currentData.records]);
   const currentPeople = useMemo(() => currentData.people || [], [currentData.people]);
+  const currentSelectedCount = currentSelectedIds.length;
 
   const todayRecs = useMemo(
     () => currentRecords.filter((record) => record.date === today()),
@@ -660,32 +750,53 @@ export default function AttendanceSystem() {
     [currentPeople, currentRecords]
   );
 
+  useEffect(() => {
+    if (!isStudentView) {
+      return;
+    }
+
+    setSection("student");
+    if (activeTab === "mark") {
+      setActiveTab("logs");
+    }
+    if (attTab === "mark") {
+      setAttTab("logs");
+    }
+  }, [activeTab, attTab, isStudentView]);
+
   const handleSectionChange = (nextSection) => {
+    if (isStudentView && nextSection !== "student") {
+      return;
+    }
+
     setSection(nextSection);
-    setActiveTab("mark");
-    setAttTab("mark");
+    const defaultTab = isStudentView ? "logs" : "mark";
+    setActiveTab(defaultTab);
+    setAttTab(defaultTab);
     setStatus("Present");
-    setCheckIn("");
-    setCheckOut("");
+    setSelectedIdsBySection((prev) => ({ ...prev, [nextSection]: [] }));
     setDateFilter(today());
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    if (!canEditAttendance) {
+      notify("You have view-only access to attendance.", "info");
+      return;
+    }
+
     if (!currentData.available) {
       notify(`Unable to load ${currentConfig.title.toLowerCase()} data right now. Please retry.`, "info");
       return;
     }
 
-    if (!currentEntityId) {
-      notify(`Please select a ${currentConfig.entityLabel.toLowerCase()}`, "error");
-      return;
-    }
-
-    const person = currentPeople.find((item) => item.id === currentEntityId);
-    if (!person) {
-      notify(`Selected ${currentConfig.entityLabel.toLowerCase()} was not found`, "error");
+    const selectedIds = currentSelectedIds;
+    if (selectedIds.length === 0) {
+      notify(
+        `Please select at least one ${currentConfig.entityLabel.toLowerCase()}`,
+        "error"
+      );
       return;
     }
 
@@ -696,32 +807,39 @@ export default function AttendanceSystem() {
 
     setSubmitting(true);
     try {
-      const payload = {
-        date: attendanceDate,
-        status,
-        checkIn,
-        checkOut,
-        [currentConfig.idField]: currentEntityId,
-        [currentConfig.nameField]: person.name,
-      };
+      const selectedPeople = selectedIds.map((id) => currentPeople.find((item) => item.id === id)).filter(Boolean);
+      if (selectedPeople.length !== selectedIds.length) {
+        throw new Error(`One or more selected ${currentConfig.peopleLabel} could not be found`);
+      }
 
-      const data = await apiRequest(currentConfig.recordsPath, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const responses = await Promise.all(
+        selectedPeople.map((person) =>
+          apiRequest(currentConfig.recordsPath, {
+            method: "POST",
+            body: JSON.stringify({
+              date: attendanceDate,
+              status,
+              [currentConfig.idField]: person.id,
+              [currentConfig.nameField]: person.name,
+            }),
+          })
+        )
+      );
 
-      if (!data.record) {
-        throw new Error(data.message || "Attendance was not saved");
+      if (responses.some((data) => !data.record)) {
+        throw new Error("Attendance was not saved");
       }
 
       await loadSectionData(section);
       setDateFilter(attendanceDate);
-      notify(data.message || `${currentConfig.entityLabel} attendance saved for ${person.name}`);
-      setFormIds((prev) => ({ ...prev, [section]: "" }));
+      notify(
+        section === "student"
+          ? `${selectedPeople.length} student attendance record${selectedPeople.length !== 1 ? "s" : ""} saved`
+          : responses[0]?.message || `${currentConfig.entityLabel} attendance saved for ${selectedPeople[0].name}`
+      );
+      setSelectedIdsBySection((prev) => ({ ...prev, [section]: [] }));
       setAttendanceDate(today());
       setStatus("Present");
-      setCheckIn("");
-      setCheckOut("");
     } catch (error) {
       notify(error.message, "error");
     } finally {
@@ -730,6 +848,11 @@ export default function AttendanceSystem() {
   };
 
   const handleDelete = async (id) => {
+    if (!isSuperAdmin) {
+      notify("Only super admin can delete attendance records.", "info");
+      return;
+    }
+
     if (!currentData.available) {
       notify(`Unable to load ${currentConfig.title.toLowerCase()} data right now. Please retry.`, "info");
       return;
@@ -753,6 +876,50 @@ export default function AttendanceSystem() {
       setDeleteId(null);
     }
   };
+
+  const handleExportExcel = useCallback(() => {
+    if (!canExportAttendance) {
+      notify("Only super admin can download the Excel sheet.", "info");
+      return;
+    }
+
+    let rows = [];
+    const fileSuffix = dateFilter || attendanceDate || today();
+
+    if (activeTab === "summary") {
+      rows = summary.map((person) => ({
+        Type: currentConfig.entityLabel,
+        Name: person.name,
+        ID: person.id,
+        Present: person.present,
+        Absent: person.absent,
+        "Half-day": person.half,
+        "Total Days": person.total,
+        "Attendance %": person.pct,
+      }));
+    } else {
+      const sourceRecords = activeTab === "mark" ? todayRecs : filteredRecs;
+      rows = sourceRecords.map((record) => ({
+        Type: currentConfig.entityLabel,
+        Name: record.entityName,
+        ID: record.entityId,
+        Date: formatDisplayDate(record.date),
+        Status: record.status,
+      }));
+    }
+
+    const downloaded = downloadCsv(
+      `${section}-attendance-${activeTab}-${fileSuffix || "all"}.csv`,
+      rows
+    );
+
+    if (!downloaded) {
+      notify("There is no attendance data to export.", "info");
+      return;
+    }
+
+    notify("Attendance Excel sheet download started.");
+  }, [activeTab, attendanceDate, canExportAttendance, currentConfig.entityLabel, dateFilter, filteredRecs, notify, section, summary, todayRecs]);
 
   if (!sectionData.student.loaded) {
     return (
@@ -987,6 +1154,41 @@ export default function AttendanceSystem() {
           font-family: 'DM Sans', sans-serif;
           transition: border-color .15s, box-shadow .15s;
         }
+        .people-checklist {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          max-height: 280px;
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+        .person-check-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          border: 1.5px solid #e2e8f0;
+          background: #f8fafc;
+          cursor: pointer;
+          transition: all .18s;
+        }
+        .person-check-item:hover {
+          border-color: #c7d2fe;
+          background: #eef2ff;
+        }
+        .person-check-item input {
+          width: 18px;
+          height: 18px;
+          accent-color: #4f46e5;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        .person-check-item.active {
+          border-color: #818cf8;
+          background: #eef2ff;
+          box-shadow: 0 8px 18px rgba(99,102,241,0.12);
+        }
         .form-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.12); background: #fff; }
         select.form-input {
           appearance: none;
@@ -1024,6 +1226,7 @@ export default function AttendanceSystem() {
           activeTab={activeTab}
           activeNav={activeNav}
           onNavigate={handleSidebarNavigate}
+          role={role}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
         />
@@ -1050,10 +1253,79 @@ export default function AttendanceSystem() {
               <Menu size={20} />
             </button>
             <div className="page-content">
+              <div
+                className="fade-up"
+                style={{
+                  marginBottom: 18,
+                  background: "linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 24,
+                  padding: "24px 26px",
+                  boxShadow: "0 12px 36px rgba(15,23,42,0.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "7px 12px",
+                      borderRadius: 999,
+                      background: isStudentView ? "#eff6ff" : "#ecfeff",
+                      color: isStudentView ? "#1d4ed8" : "#0f766e",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {isStudentView ? <Eye size={14} /> : <ShieldCheck size={14} />}
+                    {getRoleLabel(role)} {isStudentView ? "View" : "Access"}
+                  </div>
+                  <h1 style={{ fontSize: 28, fontWeight: 900, color: "#0f172a", lineHeight: 1.1 }}>
+                    Official Attendance Register
+                  </h1>
+                  <p style={{ marginTop: 8, color: "#64748b", fontSize: 14, maxWidth: 760, lineHeight: 1.6 }}>
+                    {isStudentView
+                      ? "You can view only your own student attendance records. Editing and teacher attendance are locked for student accounts."
+                      : "Manage daily student and teacher attendance from one official register. Admin can mark attendance, and super admin can also download Excel-ready reports."}
+                  </p>
+                </div>
+
+                {canExportAttendance ? (
+                  <button
+                    type="button"
+                    onClick={handleExportExcel}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 10,
+                      border: "none",
+                      borderRadius: 14,
+                      padding: "14px 18px",
+                      background: "linear-gradient(135deg, #0f172a, #1e3a8a)",
+                      color: "#fff",
+                      fontSize: 14,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      boxShadow: "0 14px 30px rgba(15,23,42,0.18)",
+                    }}
+                  >
+                    <Download size={18} />
+                    Download Excel Sheet
+                  </button>
+                ) : null}
+              </div>
+
               {["mark", "logs", "summary"].includes(activeTab) ? (
                 <div className="fade-up">
                 <div className="section-switcher" style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 18, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content", flexWrap: "nowrap" }}>
-                  {SECTION_TABS.map(({ key, label, icon, activeBg, activeShadow }) => {
+                  {SECTION_TABS.filter(({ key }) => !isStudentView || key === "student").map(({ key, label, icon, activeBg, activeShadow }) => {
                     const Icon = icon;
                     const isActive = section === key;
 
@@ -1078,7 +1350,7 @@ export default function AttendanceSystem() {
                 </div>
 
                 <div className="att-switcher" style={{ display: "flex", alignItems: "center", gap: 6, background: "#fff", borderRadius: 14, padding: "6px 8px", marginBottom: 28, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", width: "fit-content" }}>
-                  {ATT_TABS.map(({ key, label }) => (
+                  {ATT_TABS.filter(({ key }) => canEditAttendance || key !== "mark").map(({ key, label }) => (
                     <button
                       key={key}
                       onClick={() => {
@@ -1120,7 +1392,7 @@ export default function AttendanceSystem() {
                   </div>
                 ) : null}
 
-                {activeTab === "mark" ? (
+                {activeTab === "mark" && canEditAttendance ? (
                   <>
                     <div className="stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 20, marginBottom: 28 }}>
                       <StatCard label="Total Today" value={stats.total} color="#6366f1" icon={CheckSquare} sub="Records submitted" />
@@ -1148,20 +1420,47 @@ export default function AttendanceSystem() {
                             <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>
                               Select {currentConfig.entityLabel}
                             </label>
-                            <select
-                              value={currentEntityId}
-                              onChange={(event) => setFormIds((prev) => ({ ...prev, [section]: event.target.value }))}
-                              required
-                              disabled={currentPeople.length === 0}
-                              className="form-input"
-                            >
-                              <option value="">Choose a {currentConfig.entityLabel.toLowerCase()}</option>
-                              {currentPeople.map((person) => (
-                                <option key={person.id} value={person.id}>
-                                  {person.id} · {person.name}
-                                </option>
-                              ))}
-                            </select>
+                            {/* checkbox list */}
+                              <div style={{ border: "1.5px solid #e2e8f0", borderRadius: 16, background: "#fff", padding: 12 }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
+                                  <p style={{ fontSize: 13, color: "#64748b", fontWeight: 600 }}>
+                                    Tick {currentConfig.peopleLabel} one by one to mark attendance
+                                  </p>
+                                  <span style={{ fontSize: 12, fontWeight: 800, color: "#4f46e5", background: "#eef2ff", borderRadius: 999, padding: "6px 10px" }}>
+                                    {currentSelectedCount} selected
+                                  </span>
+                                </div>
+                                <div className="people-checklist">
+                                  {currentPeople.map((person, index) => {
+                                    const checked = currentSelectedIds.includes(person.id);
+                                    return (
+                                      <label key={person.id} className={`person-check-item ${checked ? "active" : ""}`}>
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={(event) => {
+                                            setSelectedIdsBySection((prev) => ({
+                                              ...prev,
+                                              [section]: event.target.checked
+                                                ? [...(prev[section] || []), person.id]
+                                                : (prev[section] || []).filter((id) => id !== person.id),
+                                            }));
+                                          }}
+                                        />
+                                        <Avatar name={person.name} idx={index} size={38} />
+                                        <div style={{ minWidth: 0 }}>
+                                          <p style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
+                                            {person.name}
+                                          </p>
+                                          <p style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                                            {person.id}
+                                          </p>
+                                        </div>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             {currentPeople.length === 0 ? (
                               <div style={{ marginTop: 12, borderRadius: 12, border: "1px solid #e2e8f0", background: "#f8fafc", padding: "14px 16px" }}>
                                 <p style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
@@ -1233,15 +1532,6 @@ export default function AttendanceSystem() {
                             </div>
                           </div>
 
-                          <div className="time-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                            {[["Check In", checkIn, setCheckIn], ["Check Out", checkOut, setCheckOut]].map(([label, value, setter]) => (
-                              <div key={label}>
-                                <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 10 }}>{label}</label>
-                                <input type="time" value={value} onChange={(event) => setter(event.target.value)} className="form-input" />
-                              </div>
-                            ))}
-                          </div>
-
                           <button
                             type="submit"
                             disabled={submitting}
@@ -1300,21 +1590,20 @@ export default function AttendanceSystem() {
                                   <Avatar name={record.entityName} idx={currentPeople.findIndex((person) => person.id === record.entityId)} size={42} />
                                   <div>
                                     <p style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>{record.entityName}</p>
-                                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
-                                      {record.entityId}
-                                      {record.checkIn ? ` · ${record.checkIn}-${record.checkOut || "?"}` : ""}
-                                    </p>
+                                    <p style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>{record.entityId}</p>
                                   </div>
                                 </div>
                                 <div className="records-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                   <Badge status={record.status} />
-                                  <button
-                                    onClick={() => handleDelete(record._id)}
-                                    disabled={deleteId === record._id}
-                                    style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 18, padding: 4, borderRadius: 8, transition: "color .15s", lineHeight: 1 }}
-                                  >
-                                    {deleteId === record._id ? "..." : "x"}
-                                  </button>
+                                  {isSuperAdmin ? (
+                                    <button
+                                      onClick={() => handleDelete(record._id)}
+                                      disabled={deleteId === record._id}
+                                      style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", fontSize: 18, padding: 4, borderRadius: 8, transition: "color .15s", lineHeight: 1 }}
+                                    >
+                                      {deleteId === record._id ? "..." : "x"}
+                                    </button>
+                                  ) : null}
                                 </div>
                               </div>
                             ))}
@@ -1347,7 +1636,7 @@ export default function AttendanceSystem() {
                       <table className="responsive-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                         <thead>
                           <tr style={{ background: "#fafbff" }}>
-                            {[currentConfig.entityLabel, "Date", "Status", "Check In", "Check Out", "Action"].map((heading, index) => (
+                            {[currentConfig.entityLabel, "Date", "Status", ...(isSuperAdmin ? ["Action"] : [])].map((heading, index) => (
                               <th key={heading} style={{ padding: "14px 20px", textAlign: index === 0 ? "left" : "center", fontSize: 11, fontWeight: 800, color: "#94a3b8", letterSpacing: 1.2, textTransform: "uppercase", borderBottom: "1px solid #f1f5f9", whiteSpace: "nowrap" }}>{heading}</th>
                             ))}
                           </tr>
@@ -1355,7 +1644,7 @@ export default function AttendanceSystem() {
                         <tbody>
                           {filteredRecs.length === 0 ? (
                             <tr>
-                              <td colSpan={6} style={{ textAlign: "center", padding: 60, color: "#cbd5e1" }}>
+                              <td colSpan={isSuperAdmin ? 4 : 3} style={{ textAlign: "center", padding: 60, color: "#cbd5e1" }}>
                                 <div style={{ fontSize: 16, fontWeight: 600 }}>No records found</div>
                               </td>
                             </tr>
@@ -1371,16 +1660,16 @@ export default function AttendanceSystem() {
                                 </div>
                               </td>
                               <td data-label="Date" style={{ padding: "15px 20px", textAlign: "center", color: "#64748b", fontSize: 13 }}>
-                                {new Date(`${record.date}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                {formatDisplayDate(record.date)}
                               </td>
                               <td data-label="Status" style={{ padding: "15px 20px", textAlign: "center" }}><Badge status={record.status} /></td>
-                              <td data-label="Check In" style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkIn || "-"}</td>
-                              <td data-label="Check Out" style={{ padding: "15px 20px", textAlign: "center", fontFamily: "monospace", color: "#64748b", fontSize: 13 }}>{record.checkOut || "-"}</td>
-                              <td data-label="Action" style={{ padding: "15px 20px", textAlign: "center" }}>
-                                <button className="del-btn" onClick={() => handleDelete(record._id)} disabled={deleteId === record._id}>
-                                  {deleteId === record._id ? "..." : "Delete"}
-                                </button>
-                              </td>
+                              {isSuperAdmin ? (
+                                <td data-label="Action" style={{ padding: "15px 20px", textAlign: "center" }}>
+                                  <button className="del-btn" onClick={() => handleDelete(record._id)} disabled={deleteId === record._id}>
+                                    {deleteId === record._id ? "..." : "Delete"}
+                                  </button>
+                                </td>
+                              ) : null}
                             </tr>
                           ))}
                         </tbody>

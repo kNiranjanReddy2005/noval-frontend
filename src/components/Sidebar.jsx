@@ -79,7 +79,7 @@ const Sidebar = () => {
       </div>
 
       <div
-        className={`fixed left-0 top-0 z-50 flex h-screen min-h-screen w-72 shrink-0 flex-col justify-between overflow-y-auto bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#0f172a] p-5 text-white shadow-xl backdrop-blur-lg transition-transform duration-300 md:sticky ${
+        className={`fixed left-0 top-0 z-50 flex h-screen min-h-screen w-[min(18rem,calc(100vw-1rem))] shrink-0 flex-col justify-between overflow-y-auto bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#0f172a] p-4 text-white shadow-xl backdrop-blur-lg transition-transform duration-300 md:sticky md:w-72 md:p-5 ${
           open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         }`}
       >

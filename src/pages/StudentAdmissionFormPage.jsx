@@ -4,15 +4,17 @@ import {
   ArrowRight,
   CheckCircle2,
   FileSpreadsheet,
+  FileText,
   GraduationCap,
   ImagePlus,
   Mail,
   MapPin,
   Phone,
   ShieldCheck,
+  Upload,
   UserRound,
 } from "lucide-react";
-import { API_BASE_URL, apiRequest } from "../config/api";
+import { apiRequest, downloadFile } from "../config/api";
 
 const courseOptions = [
   "B.Sc Nursing",
@@ -50,6 +52,8 @@ const COURSE_DOCUMENTS = {
 
 const PASS_PHOTO_LABEL = "Pass Photo";
 const CASTE_CERTIFICATE_LABEL = "Caste Certificate (SC, ST, OBC, SEBC)";
+const DOCUMENT_ACCEPT_HINT = "PDF, JPG, JPEG, PNG";
+const PHOTO_ACCEPT_HINT = "JPG, JPEG, PNG";
 
 const initialForm = {
   studentName: "",
@@ -73,6 +77,7 @@ function StudentAdmissionFormPage() {
   const [casteCertificateFile, setCasteCertificateFile] = useState(null);
   const [documentFiles, setDocumentFiles] = useState({});
   const [loading, setLoading] = useState(false);
+  const [downloadLoading, setDownloadLoading] = useState(false);
   const [successRecord, setSuccessRecord] = useState(null);
   const [error, setError] = useState("");
   const requiresCasteCertificate =
@@ -192,7 +197,30 @@ function StudentAdmissionFormPage() {
     }
   };
 
-  const exportUrl = `${API_BASE_URL}/api/admission/export/xlsx`;
+  const handleExcelDownload = async () => {
+    setDownloadLoading(true);
+    setError("");
+
+    try {
+      await downloadFile("/api/admission/export/xlsx", "admissions-export.xls");
+    } catch (downloadError) {
+      setError(downloadError.message);
+    } finally {
+      setDownloadLoading(false);
+    }
+  };
+
+  const uploadedDocumentCount = requiredDocuments.filter((documentName) => {
+    if (documentName === PASS_PHOTO_LABEL) {
+      return Boolean(photoFile);
+    }
+
+    if (documentName === CASTE_CERTIFICATE_LABEL && !requiresCasteCertificate) {
+      return false;
+    }
+
+    return Boolean(documentFiles[documentName]);
+  }).length;
 
   return (
     <section className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.16),_transparent_28%),linear-gradient(180deg,#eff6ff_0%,#f8fafc_45%,#e5e7eb_100%)] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
@@ -238,15 +266,15 @@ function StudentAdmissionFormPage() {
                 </div>
 
                 <div className="mt-8 grid gap-3">
-                  <a
-                    href={exportUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={handleExcelDownload}
+                    disabled={downloadLoading}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
                   >
                     <FileSpreadsheet size={16} />
-                    Download Excel Records
-                  </a>
+                    {downloadLoading ? "Downloading Excel..." : "Download Excel Records"}
+                  </button>
                   <Link
                     to="/dashboard/academichub/admission/records"
                     className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
@@ -479,57 +507,133 @@ function StudentAdmissionFormPage() {
                   </label>
                 </div>
 
-                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#f8fbff_0%,#ffffff_100%)] p-5 shadow-sm">
+                  <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">
+                        Document Upload Desk
+                      </p>
+                      <h3 className="mt-2 text-2xl font-black text-slate-900">
+                        Upload verified admission documents
+                      </h3>
+                      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                        Add clear scanned copies for each record. Required items are
+                        marked for the selected course and category.
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-slate-700">
+                      <span className="font-semibold text-slate-900">
+                        {uploadedDocumentCount}/{requiredDocuments.length}
+                      </span>{" "}
+                      document slots completed
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                   {requiredDocuments.map((documentName) => {
                     const isPhoto = documentName === PASS_PHOTO_LABEL;
                     const isCasteCertificate = documentName === CASTE_CERTIFICATE_LABEL;
                     const file = documentFiles[documentName] || null;
                     const isCasteRequired = isCasteCertificate ? requiresCasteCertificate : true;
+                    const isUploaded = isPhoto ? Boolean(photoFile) : Boolean(file);
+                    const helperText =
+                      isCasteCertificate && !requiresCasteCertificate
+                        ? "Optional for General category."
+                        : "Required for this application.";
 
                     return (
                       <label
                         key={`${formData.course || "course"}-upload-${documentName}`}
-                        className="rounded-[26px] border border-dashed border-blue-200 bg-[linear-gradient(180deg,#eff6ff_0%,#ffffff_100%)] p-4 shadow-sm transition hover:border-blue-300"
+                        className="group flex h-full flex-col rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
                       >
-                        <span className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
-                          <ImagePlus size={16} className="text-blue-700" />
-                          {documentName}
-                        </span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                                {isPhoto ? <ImagePlus size={16} /> : <FileText size={16} />}
+                              </span>
+                              <span className="leading-6">{documentName}</span>
+                            </span>
+                            <p className="mt-2 text-xs leading-5 text-slate-500">
+                              {helperText}
+                            </p>
+                          </div>
 
-                        <div className="flex h-full flex-col justify-between gap-4">
+                          <span
+                            className={`inline-flex shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+                              isUploaded
+                                ? "bg-emerald-50 text-emerald-700"
+                                : isCasteCertificate && !requiresCasteCertificate
+                                  ? "bg-slate-100 text-slate-500"
+                                  : "bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {isUploaded
+                              ? "Uploaded"
+                              : isCasteCertificate && !requiresCasteCertificate
+                                ? "Optional"
+                                : "Required"}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 flex h-full flex-col gap-4">
                           <input
                             type="file"
                             accept={isPhoto ? "image/*" : ".pdf,.jpg,.jpeg,.png"}
                             onChange={(event) => handleDocumentFileChange(documentName, event)}
-                            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-3 file:py-2 file:font-semibold file:text-white hover:file:bg-blue-700"
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 transition focus-within:border-blue-300 file:mr-4 file:rounded-xl file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:font-semibold file:text-white hover:file:bg-blue-700"
                             required={isPhoto || isCasteRequired}
                           />
 
                           {isPhoto ? (
                             photoPreview ? (
-                              <img
-                                src={photoPreview}
-                                alt="Admission preview"
-                                className="h-44 w-full rounded-2xl object-cover shadow-sm"
-                              />
+                              <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50">
+                                <img
+                                  src={photoPreview}
+                                  alt="Admission preview"
+                                  className="h-52 w-full object-cover shadow-sm"
+                                />
+                              </div>
                             ) : (
-                              <div className="flex h-44 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-center text-sm text-slate-500">
+                              <div className="flex h-52 flex-col items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-sm text-slate-500">
+                                <ImagePlus size={26} className="mb-3 text-slate-400" />
                                 Candidate photo preview will appear here.
                               </div>
                             )
                           ) : (
-                            <div className="flex h-44 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-center text-sm text-slate-500">
-                              {file
-                                ? file.name
-                                : isCasteCertificate && !requiresCasteCertificate
-                                  ? "Optional for General category."
-                                  : `Upload ${documentName}.`}
+                            <div className="flex min-h-52 flex-1 flex-col justify-between rounded-[24px] border border-dashed border-slate-300 bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_100%)] p-4">
+                              <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                                <Upload size={16} className="text-blue-700" />
+                                Document Status
+                              </div>
+
+                              <div className="my-4 flex flex-1 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-center text-sm text-slate-500">
+                                {file
+                                  ? file.name
+                                  : isCasteCertificate && !requiresCasteCertificate
+                                    ? "Optional for General category."
+                                    : `Upload ${documentName}.`}
+                              </div>
+
+                              <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                                <span>{DOCUMENT_ACCEPT_HINT}</span>
+                                <span>{file ? "1 file selected" : "No file selected"}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {isPhoto && (
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
+                              <span>{PHOTO_ACCEPT_HINT}</span>
+                              <span>{photoFile ? "Photo selected" : "No photo selected"}</span>
                             </div>
                           )}
                         </div>
                       </label>
                     );
                   })}
+                  </div>
                 </div>
 
                 <div className="flex flex-col gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:items-center sm:justify-between">

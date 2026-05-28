@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Logo from "../assets/Logo.png";
 import { apiRequest } from "../config/api";
+import { getStoredUser } from "../utils/auth";
 
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -51,6 +52,15 @@ const paymentModes = [
   "API Verification",
 ];
 
+const DEMAND_LETTER_BANK = {
+  beneficiaryName: "Sabarmati Educational And Charitable Trust",
+  accountNumber: "658705603145",
+  ifscCode: "ICIC0006587",
+  branch: "Mahanadivihar",
+  bankName: "ICICI BANK",
+  email: "sabarmaticollegeofnursing@gmail.com",
+};
+
 function formatCurrency(value) {
   return currencyFormatter.format(Number(value || 0));
 }
@@ -77,6 +87,61 @@ function formatDateInput(value) {
   }
 
   return date.toISOString().slice(0, 10);
+}
+
+function formatAcademicCycle(value) {
+  const date = value ? new Date(value) : new Date();
+  const startYear = date.getFullYear();
+  const endYear = String(startYear + 1).slice(-2);
+  return `${startYear}-${endYear}`;
+}
+
+function formatPlainAmount(value) {
+  return Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatOrdinalYearLabel(value) {
+  const yearNumber = Number.parseInt(String(value || "").replace(/[^\d]/g, ""), 10);
+
+  if (!Number.isFinite(yearNumber) || yearNumber <= 0) {
+    return "Current Year";
+  }
+
+  const suffixMap = {
+    1: "1ST",
+    2: "2ND",
+    3: "3RD",
+    4: "4TH",
+  };
+
+  return `${suffixMap[yearNumber] || `${yearNumber}TH`} Year`;
+}
+
+function inferCourseCompletionCycle(student) {
+  const admissionDate = student?.admissionDate ? new Date(student.admissionDate) : null;
+
+  if (!admissionDate || Number.isNaN(admissionDate.getTime())) {
+    return formatAcademicCycle();
+  }
+
+  const courseText = String(student?.course || "").toLowerCase();
+  let durationYears = 4;
+
+  if (courseText.includes("gnm")) {
+    durationYears = 3;
+  } else if (courseText.includes("post basic")) {
+    durationYears = 2;
+  } else if (courseText.includes("msc") || courseText.includes("m.sc")) {
+    durationYears = 2;
+  } else if (courseText.includes("anm")) {
+    durationYears = 2;
+  }
+
+  const completionStartYear = admissionDate.getFullYear() + durationYears - 1;
+  return `${completionStartYear}-${String(completionStartYear + 1).slice(-2)}`;
 }
 
 function buildUpiPaymentLink({
@@ -407,6 +472,163 @@ function downloadCsv(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
+function escapeExcelXml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function createExcelWorksheet(name, rows) {
+  const safeRows = Array.isArray(rows) && rows.length ? rows : [{ Info: "No data available" }];
+  const headers = Object.keys(safeRows[0]);
+  const columnCount = headers.length || 1;
+  const sanitizedName = String(name || "Sheet").slice(0, 31);
+
+  const headerRow = `<Row>${headers
+    .map(
+      (header) =>
+        `<Cell ss:StyleID="header"><Data ss:Type="String">${escapeExcelXml(header)}</Data></Cell>`
+    )
+    .join("")}</Row>`;
+
+  const dataRows = safeRows
+    .map((row) => {
+      const cells = headers
+        .map((header) => {
+          const value = row[header];
+          const isNumber = typeof value === "number" && Number.isFinite(value);
+
+          return `<Cell><Data ss:Type="${isNumber ? "Number" : "String"}">${
+            isNumber ? value : escapeExcelXml(value)
+          }</Data></Cell>`;
+        })
+        .join("");
+
+      return `<Row>${cells}</Row>`;
+    })
+    .join("");
+
+  return `
+    <Worksheet ss:Name="${escapeExcelXml(sanitizedName)}">
+      <Table ss:ExpandedColumnCount="${columnCount}" ss:DefaultRowHeight="18">
+        ${headerRow}
+        ${dataRows}
+      </Table>
+    </Worksheet>
+  `;
+}
+
+function downloadExcelWorkbook(filename, sheets) {
+  if (!Array.isArray(sheets) || !sheets.length) {
+    return;
+  }
+
+  const workbookXml = `<?xml version="1.0"?>
+  <?mso-application progid="Excel.Sheet"?>
+  <Workbook
+    xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+    xmlns:o="urn:schemas-microsoft-com:office:office"
+    xmlns:x="urn:schemas-microsoft-com:office:excel"
+    xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+    xmlns:html="http://www.w3.org/TR/REC-html40">
+    <Styles>
+      <Style ss:ID="header">
+        <Font ss:Bold="1"/>
+        <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
+      </Style>
+    </Styles>
+    ${sheets.map((sheet) => createExcelWorksheet(sheet.name, sheet.rows)).join("")}
+  </Workbook>`;
+
+  const blob = new Blob([workbookXml], {
+    type: "application/vnd.ms-excel;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename.endsWith(".xls") ? filename : `${filename}.xls`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function buildFeeExcelSheets({ student, summary, reports }) {
+  const studentName = student?.studentName || student?.fullName || "Student";
+
+  return [
+    {
+      name: "Overview",
+      rows: [
+        {
+          "Student Name": studentName,
+          "Registration No": student?.registrationNo || "Not available",
+          Course: student?.course || "Not available",
+          "Fee Plan": student?.feePlan || "Yearly",
+          Status: student?.outstandingStatus || "Pending",
+          "Total Fee": Number(student?.totalFee || 0),
+          "Paid Amount": Number(student?.paidAmount || 0),
+          "Pending Amount": Number(student?.pendingAmount || 0),
+          "Total Discount": Number(student?.totalDiscount || 0),
+          "Extra Charges": Number(student?.totalExtraCharges || 0),
+          "Total Fine": Number(student?.totalFine || 0),
+          "Next Due Date": formatDate(student?.nextDueDate),
+        },
+      ],
+    },
+    {
+      name: "Dashboard Summary",
+      rows: [
+        {
+          "Total Students": Number(summary?.totalStudents || 0),
+          "Total Collection": Number(summary?.totalFeeCollection || 0),
+          "Total Due": Number(summary?.totalDueAmount || 0),
+          "Total Outstanding": Number(summary?.totalOutstanding || 0),
+          "Total Refunds": Number(summary?.totalRefunds || 0),
+          "Total Fines": Number(summary?.totalFines || 0),
+          "Paid Students": Number(summary?.paidStudents || 0),
+          "Pending Students": Number(summary?.pendingStudents || 0),
+          "Overdue Students": Number(summary?.overdueStudents || 0),
+        },
+      ],
+    },
+    {
+      name: "Payment History",
+      rows:
+        student?.paymentHistory?.map((payment) => ({
+          "Receipt Number": payment.receiptNumber || "",
+          Amount: Number(payment.amount || 0),
+          Method: payment.method || "",
+          "Transaction ID": payment.transactionId || "",
+          Status: payment.status || "",
+          "Payment Date": formatDate(payment.paymentDate),
+          "Confirmed By": payment.confirmedBy || "",
+          Note: payment.note || "",
+        })) || [],
+    },
+    {
+      name: "Student Ledger",
+      rows:
+        student?.ledgerEntries?.map((entry) => ({
+          Entry: entry.title || "",
+          Category: entry.category || "",
+          Direction: entry.direction || "",
+          Amount: Number(entry.amount || 0),
+          "Balance After": Number(entry.balanceAfter || 0),
+        })) || [],
+    },
+    {
+      name: "Due Report",
+      rows: reports?.dueReport || [],
+    },
+    {
+      name: "Refund Report",
+      rows: reports?.refundReport || [],
+    },
+  ];
+}
+
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -494,25 +716,156 @@ function downloadLetterPdf({ student, type }) {
   doc.setFontSize(12);
 
   if (type === "bonafide") {
-    const lines = doc.splitTextToSize(
-      `This is to certify that ${studentName} bearing registration number ${
-        student?.registrationNo || "N/A"
-      } is a bonafide student of ${student?.course || "the institution"} for ${
-        student?.year || "the current academic session"
-      }.`,
-      180
+    const course = student?.course || "Not available";
+    const currentYearLabel = formatOrdinalYearLabel(student?.year);
+    const batchLabel = formatAcademicCycle(student?.admissionDate);
+    const courseCompletionLabel = inferCourseCompletionCycle(student);
+    const fatherName =
+      student?.fatherName ||
+      student?.father ||
+      student?.guardianName ||
+      student?.parentName ||
+      "Not available";
+    const motherName = student?.motherName || student?.mother || "Not available";
+    const selectionProcedure =
+      student?.selectionProcedure || "On The Basis OJEE ENTRANCE EXAM";
+
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, 210, 297, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(19);
+    doc.text("STUDY/BONAFIDE CERTIFICATE", 105, 34, { align: "center" });
+    doc.setLineWidth(0.8);
+    doc.line(61, 37, 149, 37);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(15);
+    const introLines = doc.splitTextToSize(
+      "This is to certify that the following details pertaining to the student of this Institution is/are true.",
+      150
     );
-    doc.text(lines, 14, 48);
+    doc.text(introLines, 105, 62, { align: "center" });
+
+    let y = 96;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(14);
+    doc.text("Name of the Student:-", 25, y);
+    doc.setFont("helvetica", "bold");
+    doc.text(studentName, 80, y);
+    y += 14;
+
+    [
+      ["Father Name", fatherName],
+      ["Mother Name", motherName],
+      ["Studying in Course", course],
+      ["Year of Course", student?.year ? String(student.year) : "Not available"],
+      ["Year of Study", `${currentYearLabel} (${batchLabel} Batch)`],
+      ["Course Completed", `(${courseCompletionLabel})`],
+    ].forEach(([label, value]) => {
+      doc.setFont("helvetica", "normal");
+      doc.text(label, 25, y);
+      doc.text(":-", 72, y);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(value), 84, y);
+      y += 13;
+    });
+
+    doc.setFont("helvetica", "normal");
+    doc.text("Selection procedure :-", 25, y);
+    doc.setFont("helvetica", "bold");
+    const selectionLines = doc.splitTextToSize(String(selectionProcedure), 100);
+    doc.text(selectionLines, 92, y);
+    y += selectionLines.length * 9 + 10;
+
+    doc.setFont("helvetica", "normal");
+    const closingLine =
+      student?.gender === "Female"
+        ? "She is an obedient student in our college."
+        : "He is an obedient student in our college.";
+    doc.text(closingLine, 25, y);
+
+    doc.setFontSize(10);
+    doc.text(`Mail id:- ${DEMAND_LETTER_BANK.email}`, 25, 280);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(15);
+    doc.text("Signature of the Principal", 166, 248, { align: "right" });
+    doc.save(`bonafide-certificate-${student?.registrationNo || "student"}.pdf`);
+    return;
   } else {
-    const lines = doc.splitTextToSize(
-      `This letter is issued to inform ${studentName} that an outstanding fee amount of ${formatCurrency(
-        student?.pendingAmount
-      )} is due. Please complete the payment on or before ${
-        formatDate(student?.nextDueDate) || "the notified due date"
-      }.`,
-      180
+    const course = student?.course || "Course";
+    const yearLabel = student?.year || "Current Year";
+    const batchLabel = formatAcademicCycle(student?.admissionDate);
+    const totalFee = Number(student?.totalFee || 0);
+    const paidAmount = Number(student?.paidAmount || 0);
+    const pendingAmount = Number(student?.pendingAmount || 0);
+    const dueDateLabel = student?.nextDueDate
+      ? new Date(student.nextDueDate).toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "the notified due date";
+
+    try {
+      const logo = new Image();
+      logo.src = Logo;
+      doc.addImage(logo, "PNG", 16, 12, 22, 22);
+    } catch {
+      // Keep the letter usable even if the logo is unavailable.
+    }
+
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, 210, 297, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(17, 24, 39);
+    doc.setFontSize(22);
+    doc.text("Demanding Letter", 105, 34, { align: "center" });
+    doc.setLineWidth(0.8);
+    doc.line(72, 37, 138, 37);
+
+    doc.setFontSize(16);
+    doc.text(`NAME:- ${studentName}`, 105, 56, { align: "center" });
+    doc.text(`${course} (${batchLabel}) BATCH`, 105, 72, { align: "center" });
+    doc.text(`FEES STRUCTURE OF ${course} :${batchLabel}`, 105, 88, { align: "center" });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    const bodyLines = doc.splitTextToSize(
+      `${yearLabel} course fees ${formatPlainAmount(totalFee)}/-, he paid ${formatPlainAmount(
+        paidAmount
+      )} and remaining due ${formatPlainAmount(pendingAmount)}/-. Please deposit the due course fees on or before ${dueDateLabel} in the bank account below.`,
+      155
     );
-    doc.text(lines, 14, 48);
+    doc.text(bodyLines, 25, 108);
+
+    let y = 108 + bodyLines.length * 9 + 8;
+    doc.text("Bank Detail :-", 25, y);
+    y += 14;
+
+    [
+      ["Beneficiary Name", DEMAND_LETTER_BANK.beneficiaryName],
+      ["Account Number", DEMAND_LETTER_BANK.accountNumber],
+      ["IFSC Code", DEMAND_LETTER_BANK.ifscCode],
+      ["Branch", DEMAND_LETTER_BANK.branch],
+      ["Bank", DEMAND_LETTER_BANK.bankName],
+    ].forEach(([label, value]) => {
+      const text = `${label.padEnd(18, " ")} :- ${value}`;
+      const wrapped = doc.splitTextToSize(text, 155);
+      doc.text(wrapped, 25, y);
+      y += wrapped.length * 9 + 4;
+    });
+
+    doc.setFontSize(10);
+    doc.text(`Mail id:- ${DEMAND_LETTER_BANK.email}`, 25, 280);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("Signature of Principal", 165, 258, { align: "right" });
+    doc.save(`demand-letter-${student?.registrationNo || "student"}.pdf`);
+    return;
   }
 
   doc.text(`Generated on: ${formatDate(new Date().toISOString())}`, 14, 85);
@@ -532,6 +885,8 @@ function statusClass(status) {
 }
 
 const Fee = () => {
+  const currentUser = getStoredUser();
+  const isStudentView = currentUser?.role === "student";
   const [searchParams] = useSearchParams();
   const [students, setStudents] = useState([]);
   const [student, setStudent] = useState(null);
@@ -583,6 +938,7 @@ const Fee = () => {
   });
 
   const pendingAmount = Number(student?.pendingAmount || 0);
+  const hasPendingDue = pendingAmount > 0;
   const normalizedAmount = Number(paymentAmount);
   const isValidAmount =
     Number.isFinite(normalizedAmount) &&
@@ -627,6 +983,20 @@ const Fee = () => {
   ]);
 
   const refreshAnalytics = async (currentStudents) => {
+    if (isStudentView) {
+      setSummary(createFallbackSummary(currentStudents));
+      setReports(createFallbackReports(currentStudents));
+      setCapabilities((prev) => ({
+        ...prev,
+        feeSummary: false,
+        feeReports: false,
+        manualPayment: false,
+        feeConfig: false,
+        feeRefunds: false,
+      }));
+      return;
+    }
+
     try {
       const summaryResponse = await apiRequest("/api/students/fees/summary");
       setSummary(summaryResponse.overview);
@@ -701,29 +1071,51 @@ const Fee = () => {
       setError("");
 
       try {
-        const list = await apiRequest("/api/students");
-        const normalizedList = list.map(sanitizeStudent);
+        if (isStudentView) {
+          const response = await apiRequest("/api/students/me/fees");
+          const normalizedStudent = sanitizeStudent(response.student);
+          const nextStudents = normalizedStudent ? [normalizedStudent] : [];
 
-        if (ignore) {
-          return;
+          if (ignore) {
+            return;
+          }
+
+          setStudents(nextStudents);
+          setStudent(normalizedStudent);
+          setLatestReceipt(normalizedStudent?.paymentHistory?.[0] || null);
+          setSelectedRegistrationNo(normalizedStudent?.registrationNo || "");
+          setPaymentAmount(
+            normalizedStudent?.pendingAmount > 0
+              ? String(normalizedStudent.pendingAmount)
+              : ""
+          );
+          syncConfigForm(normalizedStudent);
+          await refreshAnalytics(nextStudents);
+        } else {
+          const list = await apiRequest("/api/students");
+          const normalizedList = list.map(sanitizeStudent);
+
+          if (ignore) {
+            return;
+          }
+
+          setStudents(normalizedList);
+          await refreshAnalytics(normalizedList);
+
+          const registrationNo =
+            searchParams.get("registrationNo") ||
+            selectedRegistrationNo ||
+            normalizedList[0]?.registrationNo ||
+            "";
+
+          if (!registrationNo) {
+            setStudent(null);
+            return;
+          }
+
+          setSelectedRegistrationNo(registrationNo);
+          await refreshSelectedStudent(registrationNo, normalizedList);
         }
-
-        setStudents(normalizedList);
-        await refreshAnalytics(normalizedList);
-
-        const registrationNo =
-          searchParams.get("registrationNo") ||
-          selectedRegistrationNo ||
-          normalizedList[0]?.registrationNo ||
-          "";
-
-        if (!registrationNo) {
-          setStudent(null);
-          return;
-        }
-
-        setSelectedRegistrationNo(registrationNo);
-        await refreshSelectedStudent(registrationNo, normalizedList);
       } catch (loadError) {
         if (!ignore) {
           setError(loadError.message);
@@ -741,6 +1133,13 @@ const Fee = () => {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasPendingDue) {
+      setPaymentAmount("");
+      setShowQr(false);
+    }
+  }, [hasPendingDue]);
 
   const updateLocalStudent = async (nextStudent, receipt) => {
     const normalized = sanitizeStudent(nextStudent);
@@ -789,6 +1188,10 @@ const Fee = () => {
   const validatePaymentInput = () => {
     if (!student) {
       return "Select a student first.";
+    }
+
+    if (!hasPendingDue) {
+      return "This student has no pending due. Payment is already cleared.";
     }
 
     if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
@@ -1126,29 +1529,31 @@ const Fee = () => {
     }
   };
 
-  const notices = [
-    !capabilities.feeDashboard
-      ? "Fee dashboard route unavailable. The page is using the general student list fallback."
-      : "",
-    !capabilities.manualPayment
-      ? "Manual payment confirmation route is unavailable on the connected backend."
-      : "",
-    !capabilities.razorpay
-      ? "Razorpay order creation route is unavailable on the connected backend."
-      : "",
-    !capabilities.feeSummary
-      ? "Analytics summary route unavailable. Dashboard cards are using local fallback calculations."
-      : "",
-    !capabilities.feeReports
-      ? "Reports route unavailable. Report tables are using local fallback calculations."
-      : "",
-    !capabilities.feeConfig
-      ? "Fee configuration updates are unavailable on the connected backend."
-      : "",
-    !capabilities.feeRefunds
-      ? "Refund management route is unavailable on the connected backend."
-      : "",
-  ].filter(Boolean);
+  const notices = isStudentView
+    ? []
+    : [
+        !capabilities.feeDashboard
+          ? "Fee dashboard route unavailable. The page is using the general student list fallback."
+          : "",
+        !capabilities.manualPayment
+          ? "Manual payment confirmation route is unavailable on the connected backend."
+          : "",
+        !capabilities.razorpay
+          ? "Razorpay order creation route is unavailable on the connected backend."
+          : "",
+        !capabilities.feeSummary
+          ? "Analytics summary route unavailable. Dashboard cards are using local fallback calculations."
+          : "",
+        !capabilities.feeReports
+          ? "Reports route unavailable. Report tables are using local fallback calculations."
+          : "",
+        !capabilities.feeConfig
+          ? "Fee configuration updates are unavailable on the connected backend."
+          : "",
+        !capabilities.feeRefunds
+          ? "Refund management route is unavailable on the connected backend."
+          : "",
+      ].filter(Boolean);
 
   const summaryCards = [
     {
@@ -1173,42 +1578,47 @@ const Fee = () => {
       label: "Late Fee Fines",
       value: formatCurrency(summary?.totalFines),
       icon: Percent,
-      tone: "bg-sky-50 border-sky-200 text-sky-900",
+      tone: "bg-white border-slate-200 text-slate-900",
     },
   ];
 
+  const handleDownloadExcel = () => {
+    const excelSheets = buildFeeExcelSheets({ student, summary, reports });
+    const registrationNo = student?.registrationNo || "fee-report";
+    downloadExcelWorkbook(`fee-report-${registrationNo}.xls`, excelSheets);
+  };
+
   return (
-    <section className="min-h-screen bg-[linear-gradient(180deg,#edf4ff_0%,#f7fbff_48%,#f8fafc_100%)] px-4 py-5 sm:px-6 lg:px-8">
+    <section className="min-h-screen bg-slate-100 px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <div className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_26px_80px_rgba(15,23,42,0.08)]">
-          <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_48%,#0f766e_100%)] px-5 py-6 text-white sm:px-8 sm:py-8">
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-slate-900 px-5 py-6 text-white sm:px-8 sm:py-8">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
               <div className="max-w-4xl">
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-100">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-slate-100">
                   <ShieldCheck size={14} />
                   Finance Office
                 </span>
                 <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">
-                   fee collection and finance control 
+                  Fee Collection and Finance Control
                 </h1>
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-200 sm:text-base">
-                  Manage fee structures, semester or yearly dues, QR and Razorpay collections,
-                  discounts, refunds, exam fees, outstanding tracking, certificates, and reports
-                  from one responsive admin workspace.
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300 sm:text-base">
+                  Manage student fee records, dues, receipts, refunds, certificates, and reports
+                  from one clear and professional finance dashboard.
                 </p>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <Link
                   to="/dashboard/academichub/admission"
-                  className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+                  className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-transparent px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                 >
                   New Admission
                 </Link>
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+                  className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
                 >
                   Refresh Dashboard
                 </button>
@@ -1245,14 +1655,14 @@ const Fee = () => {
             )}
 
             {loading ? (
-              <div className="flex min-h-[360px] items-center justify-center rounded-[24px] border border-slate-200 bg-slate-50">
+              <div className="flex min-h-[360px] items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
                 <div className="flex items-center gap-3 text-slate-600">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
                   Loading student fee workspace...
                 </div>
               </div>
             ) : students.length === 0 ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
                 <h2 className="text-xl font-bold text-slate-900">
                   No students available yet
                 </h2>
@@ -1275,7 +1685,7 @@ const Fee = () => {
                     return (
                       <div
                         key={card.label}
-                        className={`rounded-[24px] border p-5 ${card.tone}`}
+                        className={`rounded-2xl border p-5 ${card.tone}`}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
@@ -1284,7 +1694,7 @@ const Fee = () => {
                             </p>
                             <p className="mt-3 text-3xl font-black">{card.value}</p>
                           </div>
-                          <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/70">
+                          <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
                             <Icon size={22} />
                           </span>
                         </div>
@@ -1293,8 +1703,9 @@ const Fee = () => {
                   })}
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                {!isStudentView && (
+                  <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div className="flex items-center gap-3">
                       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
                         <LayoutDashboard size={22} />
@@ -1334,7 +1745,7 @@ const Fee = () => {
                       </div>
                     </div>
 
-                    <div className="mt-5 rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+                    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-700">
                           Monthly Revenue Analytics
@@ -1358,7 +1769,7 @@ const Fee = () => {
                             <div key={item.label} className="flex flex-col items-center gap-3">
                               <div className="flex h-32 w-full items-end rounded-2xl bg-white px-3 py-3">
                                 <div
-                                  className="w-full rounded-xl bg-[linear-gradient(180deg,#2563eb_0%,#0f766e_100%)] transition-all"
+                                  className="w-full rounded-lg bg-slate-700 transition-all"
                                   style={{ height: `${Math.max(height, 10)}px` }}
                                 />
                               </div>
@@ -1375,7 +1786,7 @@ const Fee = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div className="flex items-center gap-3">
                       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
                         <ScrollText size={22} />
@@ -1425,14 +1836,67 @@ const Fee = () => {
                         </div>
                       )}
                     </div>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {isStudentView ? (
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-emerald-700">
+                        <LayoutDashboard size={22} />
+                      </span>
+                      <div>
+                        <h2 className="text-xl font-bold text-slate-900">Student Fee Overview</h2>
+                        <p className="text-sm text-slate-600">
+                          View your fee summary, receipt history, and payment ledger from one place.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-4">
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          Total Fee
+                        </p>
+                        <p className="mt-2 text-2xl font-black text-slate-900">
+                          {formatCurrency(student?.totalFee)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          Paid
+                        </p>
+                        <p className="mt-2 text-2xl font-black text-emerald-900">
+                          {formatCurrency(student?.paidAmount)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          Pending
+                        </p>
+                        <p className="mt-2 text-2xl font-black text-amber-900">
+                          {formatCurrency(student?.pendingAmount)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                          Receipts
+                        </p>
+                        <p className="mt-2 text-2xl font-black text-sky-900">
+                          {student?.paymentHistory?.length || 0}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                   <div className="space-y-6">
-                    <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-                        <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                        {!isStudentView ? (
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
                           <label className="mb-2 block text-sm font-semibold text-slate-700">
                             Select Student
                           </label>
@@ -1447,9 +1911,10 @@ const Fee = () => {
                               </option>
                             ))}
                           </select>
-                        </div>
+                          </div>
+                        ) : null}
 
-                        <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-5">
                           <div className="flex items-center gap-3">
                             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
                               <UserRound size={22} />
@@ -1506,7 +1971,7 @@ const Fee = () => {
                       </div>
 
                       <div className="mt-5 grid gap-4 md:grid-cols-4">
-                        <div className="rounded-[24px] border border-slate-200 bg-white p-5">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-5">
                           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                             Base + Structure
                           </p>
@@ -1514,34 +1979,34 @@ const Fee = () => {
                             {formatCurrency(student?.baseFee)}
                           </p>
                         </div>
-                        <div className="rounded-[24px] border border-sky-200 bg-sky-50 p-5">
-                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                             Discounts
                           </p>
-                          <p className="mt-3 text-2xl font-black text-sky-900">
+                          <p className="mt-3 text-2xl font-black text-slate-900">
                             {formatCurrency(student?.totalDiscount)}
                           </p>
                         </div>
-                        <div className="rounded-[24px] border border-violet-200 bg-violet-50 p-5">
-                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-violet-700">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                             Charges + Exam Fees
                           </p>
-                          <p className="mt-3 text-2xl font-black text-violet-900">
+                          <p className="mt-3 text-2xl font-black text-slate-900">
                             {formatCurrency(student?.totalExtraCharges)}
                           </p>
                         </div>
-                        <div className="rounded-[24px] border border-amber-200 bg-amber-50 p-5">
-                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-700">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
                             Pending Due
                           </p>
-                          <p className="mt-3 text-2xl font-black text-amber-900">
+                          <p className="mt-3 text-2xl font-black text-slate-900">
                             {formatCurrency(student?.pendingAmount)}
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-100 text-teal-700">
                           <CreditCard size={22} />
@@ -1586,10 +2051,18 @@ const Fee = () => {
                               min="1"
                               value={paymentAmount}
                               onChange={(event) => setPaymentAmount(event.target.value)}
+                              disabled={!hasPendingDue}
                               className="w-full rounded-2xl bg-transparent px-3 py-3 text-sm text-slate-700 outline-none"
-                              placeholder="Enter payment amount"
+                              placeholder={
+                                hasPendingDue ? "Enter payment amount" : "No pending due"
+                              }
                             />
                           </div>
+                          {!hasPendingDue ? (
+                            <p className="mt-2 text-xs font-medium text-emerald-700">
+                              Payment already cleared for this student. Confirm payment is disabled.
+                            </p>
+                          ) : null}
                         </div>
 
                         <div>
@@ -1600,6 +2073,7 @@ const Fee = () => {
                             type="text"
                             value={upiId}
                             onChange={(event) => setUpiId(event.target.value)}
+                            disabled={!hasPendingDue}
                             className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                             placeholder="schoolfees@okaxis"
                           />
@@ -1613,6 +2087,7 @@ const Fee = () => {
                             type="text"
                             value={payeeName}
                             onChange={(event) => setPayeeName(event.target.value)}
+                            disabled={!hasPendingDue}
                             className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                             placeholder="Campus Fee Collection"
                           />
@@ -1628,6 +2103,7 @@ const Fee = () => {
                                 type="text"
                                 value={transactionId}
                                 onChange={(event) => setTransactionId(event.target.value)}
+                                disabled={!hasPendingDue}
                                 className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                                 placeholder="Optional transaction id"
                               />
@@ -1641,6 +2117,7 @@ const Fee = () => {
                                 rows="3"
                                 value={note}
                                 onChange={(event) => setNote(event.target.value)}
+                                disabled={!hasPendingDue}
                                 className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                                 placeholder="Add note, reference, or confirmation details"
                               />
@@ -1655,7 +2132,7 @@ const Fee = () => {
                             type="button"
                             onClick={handleRazorpayPayment}
                             disabled={submitting || !student || pendingAmount <= 0}
-                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#0f766e_0%,#2563eb_100%)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-100 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {submitting ? (
                               <>
@@ -1674,7 +2151,8 @@ const Fee = () => {
                             <button
                               type="button"
                               onClick={handleGenerateQr}
-                              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                              disabled={!hasPendingDue}
+                              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                             >
                               <QrCode size={16} />
                               Generate QR
@@ -1683,8 +2161,8 @@ const Fee = () => {
                             <button
                               type="button"
                               onClick={handleManualConfirm}
-                              disabled={submitting || !student || pendingAmount <= 0}
-                              className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#0f766e_0%,#2563eb_100%)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-teal-100 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={submitting || !student || !hasPendingDue}
+                              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {submitting ? (
                                 <>
@@ -1705,7 +2183,7 @@ const Fee = () => {
                   </div>
 
                   <div className="space-y-6">
-                    <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
                           <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
@@ -1734,12 +2212,12 @@ const Fee = () => {
                       </div>
 
                       {paymentMethod === "Razorpay Checkout" ? (
-                        <div className="mt-5 rounded-[20px] border border-slate-200 bg-slate-50 p-5">
+                        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-teal-700">
-                            Razorpay Automatic Checkout
+                            Razorpay Checkout
                           </p>
                           <h4 className="mt-2 text-lg font-bold text-slate-900">
-                            Official online payment flow
+                            Online payment
                           </h4>
                           <p className="mt-3 text-sm leading-7 text-slate-600">
                             The system creates a Razorpay order, opens secure checkout, verifies the signature,
@@ -1761,7 +2239,7 @@ const Fee = () => {
                           </div>
                         </div>
                       ) : showQr && upiPaymentLink ? (
-                        <div className="mt-5 rounded-[20px] border border-slate-200 bg-slate-50 p-5">
+                        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                           <div className="flex justify-center rounded-2xl bg-white p-4">
                             <QRCodeSVG
                               value={upiPaymentLink}
@@ -1788,7 +2266,7 @@ const Fee = () => {
                           </div>
                         </div>
                       ) : (
-                        <div className="mt-5 rounded-[20px] border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
+                        <div className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
                           <p className="text-sm leading-7 text-slate-600">
                             Generate a QR code or use another payment flow to begin collection. The latest
                             confirmed receipt will appear here for download.
@@ -1818,7 +2296,7 @@ const Fee = () => {
                       </div>
 
                       {latestReceipt && (
-                        <div className="mt-5 rounded-[20px] border border-emerald-200 bg-emerald-50 p-5">
+                        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-700">
@@ -1865,14 +2343,15 @@ const Fee = () => {
                   </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                {!isStudentView ? (
+                  <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div className="flex items-center gap-3">
                       <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
                         <BadgeIndianRupee size={22} />
                       </span>
                       <div>
-                        <h3 className="text-xl font-bold text-slate-900">Fee Structure & Due Setup</h3>
+                        <h3 className="text-xl font-bold text-slate-900">Fee Structure and Due Setup</h3>
                         <p className="text-sm text-slate-500">
                           Configure fee plans, structure items, extra admission charges, exam fees, discounts, and fine rules.
                         </p>
@@ -2112,8 +2591,8 @@ const Fee = () => {
                     </button>
                   </div>
 
-                  <div className="space-y-6">
-                    <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                    <div className="space-y-6">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-700">
                           <Landmark size={22} />
@@ -2174,7 +2653,7 @@ const Fee = () => {
                       </div>
                     </div>
 
-                    <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
@@ -2187,6 +2666,15 @@ const Fee = () => {
                             </p>
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={handleDownloadExcel}
+                          disabled={!student}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Download size={16} />
+                          Download Excel
+                        </button>
                       </div>
 
                       <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -2231,12 +2719,13 @@ const Fee = () => {
                           Refund Report
                         </button>
                       </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : null}
 
                 <div className="grid gap-6 xl:grid-cols-2">
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <h3 className="text-xl font-bold text-slate-900">Payment History</h3>
@@ -2301,7 +2790,7 @@ const Fee = () => {
                     )}
                   </div>
 
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <div>
                       <h3 className="text-xl font-bold text-slate-900">Student Ledger</h3>
                       <p className="text-sm text-slate-500">
@@ -2353,7 +2842,7 @@ const Fee = () => {
                 </div>
 
                 <div className="grid gap-6 xl:grid-cols-3">
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <h3 className="text-lg font-bold text-slate-900">Fee Structure</h3>
                     <div className="mt-4 space-y-3">
                       {student?.feeStructure?.length ? (
@@ -2374,7 +2863,7 @@ const Fee = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <h3 className="text-lg font-bold text-slate-900">Charges, Exams & Discounts</h3>
                     <div className="mt-4 space-y-3">
                       {[...(student?.extraCharges || []), ...(student?.examFees || [])].length ? (
@@ -2403,7 +2892,7 @@ const Fee = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-[26px] border border-slate-200 bg-white p-5">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5">
                     <h3 className="text-lg font-bold text-slate-900">Refund & Fine History</h3>
                     <div className="mt-4 space-y-3">
                       {student?.fineRules?.map((item) => (
